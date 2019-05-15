@@ -1,0 +1,38 @@
+sequenceDiagram
+    participant User Agent
+    participant Authz
+    participant Client
+    participant Rsrc
+
+    Note over User Agent: Owner gives its alias<br/>Client gets Authz's<br/>hostname
+
+    User Agent->>Authz: 🔑 GET /alias/authorize
+
+    alt No known registration order
+        Authz->>+Client: 🔑 GET /alias/register
+        Client-->>-Authz: signed registration order
+        Note over Authz: registration order is valid
+    end
+
+    Note over Authz: Owner grants access
+    Authz-->>User Agent: authorization code/signed order
+    Note over User Agent: authorization order is valid
+
+    User Agent->>Client: authorization code/signed order
+
+    Note over Client,Authz: TBD in less than 10min
+    Client->>+Authz: 🔑🔑 POST /alias/token
+    Authz-->>-Client: access&refresh tokens/signed orders
+
+    Note over Client: access&refresh orders are valid
+
+    Note over Client,Rsrc: While the access token is valid
+    Client->>+Rsrc: 🔑🔑 GET /alias/provider/...
+    Rsrc-->>-Client: resource
+
+    alt Access token is outdated
+        Client->>+Authz: 🔑🔑 POST /alias/token
+        Authz-->>-Client: new access token/signed order
+    Note over Client: new access order is valid
+    end
+

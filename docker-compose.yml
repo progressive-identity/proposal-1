@@ -1,0 +1,118 @@
+
+version: "2"
+
+services:
+    ### Client ############################################
+    client.alias:
+        image: alias/ref-python
+        ports:
+            - "127.0.1.1:80:80"
+
+        environment:
+            - FLASK_APP=client_app
+            - FLASK_DEBUG=y
+            - FLASK_SECRET_KEY="R/obWlw/RjRjF4/tKQmgIyEKjOQVQz90NEClkGDvsYg="
+            - ALIAS_DOMAIN=client.alias
+            - ALIAS_SK=_dVj-FVsTV5NR-La1lpIrHtf2os5TvnZGgpJKtoKkMVrFogDmu2ZmK5GVyYmjqJJQhzeXv3_3Du_J7_ES75N9g.ed25519.secret
+            - ALIAS_DB_URI=sqlite:////store/{}.sqlite
+
+        volumes:
+            - ./src/py:/app:ro
+            - ./src/templates:/templates:ro
+            - ./src/static:/static:ro
+            - ./db/store:/store
+
+        links:
+            - authz.alias
+            - rsrc.alias
+
+        command: python3 client_app.py
+
+    ### Authorization server ##############################
+    authz.alias:
+        image: alias/ref-python
+        ports:
+            - "127.0.1.2:80:80"
+
+        environment:
+            - FLASK_APP=authz_app
+            - FLASK_DEBUG=y
+            - FLASK_SECRET_KEY="V+lyTWhxClXECzI6TkqYkZ3Rngnz5UZ2Mt1IO/eAgIs="
+
+            - ALIAS_AUTHZ_BROKER=redis://redis.authz.alias
+            - ALIAS_DB_URI=sqlite:////store/{}.sqlite
+            - ALIAS_DOMAIN=authz.alias
+            - ALIAS_SK=Tzp4MZDCj25Fo5vy1fSZzmuu82JcbG3-LjlIcj9jbHEeCiplg32_fNo-r0XRUMgnywtYKFw_TZAnAapKl8LMqQ.ed25519.secret
+
+        volumes:
+            - ./src/py:/app:ro
+            - ./src/templates:/templates:ro
+            - ./src/static:/static:ro
+            - ./db/store:/store
+
+        links:
+            - redis.authz.alias
+
+            # resource server
+            - rsrc.alias
+            - backend.rsrc.alias
+
+        command: python3 authz_app.py
+
+    worker.authz.alias:
+        image: alias/ref-python
+
+        environment:
+            - ALIAS_AUTHZ_BROKER=redis://redis.authz.alias
+            - ALIAS_DOMAIN=authz.alias
+
+        links:
+            - redis.authz.alias
+
+            # resource server
+            - rsrc.alias
+            - backend.rsrc.alias
+
+        volumes:
+            - ./src/py:/app:ro
+
+        command: celery -A authz_worker worker --loglevel=info
+
+    redis.authz.alias:
+        image: redis
+
+    ### Resource server ###################################
+
+    rsrc.alias:
+        image: alias/tls-proxy
+        ports:
+            - "127.0.1.3:443:443"
+
+        links:
+            - backend.rsrc.alias
+
+        volumes:
+            - ./db/proxy:/proxy
+
+        command: go run tls-proxy.go -cert /proxy/server.crt -key /proxy/server.key -redirect http://backend.rsrc.alias:80
+
+    backend.rsrc.alias:
+        image: alias/ref-python
+        ports:
+            - "127.0.1.3:80:80"
+
+        environment:
+            - FLASK_APP=rsrc_app
+            - FLASK_DEBUG=y
+            - FLASK_SECRET_KEY="1j85+vCY9J8SmP0MjebSsqh9k2oNA/RDhjsR9LqeoDw="
+            - ALIAS_DOMAIN=backend.rsrc.alias
+            - ALIAS_SK=RSK-6Bwsar5P4ny1XDUvDejc3vMA7XySm4AH_lS3cW2BQCZBCPU77O3jyF-7xs9G8axuJPrOVxurzcitdvsueQ.ed25519.secret
+            - ALIAS_DB_URI=sqlite:////store/{}.sqlite
+
+        volumes:
+            - ./src/py:/app:ro
+            - ./db/store:/store
+            - ./db/rsrc:/rsrc
+
+        command: python3 rsrc_app.py
+

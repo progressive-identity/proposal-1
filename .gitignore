@@ -1,0 +1,7 @@
+*.crt
+*.key
+*.csr
+*.sk
+
+src/static/jquery-*.js
+src/static/libsodium.js

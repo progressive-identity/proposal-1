@@ -1,0 +1,17 @@
+<html>
+    <head>
+        <title>Authorize request</title>
+
+        {% include 'authz_head.html' %}
+    </head>
+
+    <html>
+        <h1>Oauth 2.0 error</h1>
+
+        <p>The authorization server returned an error: <b>{{ error }}</b></p>
+        {% if desc %}
+        <p>Description: {{ desc|safe }}</p>
+        {% endif %}
+    </html>
+</html>
+

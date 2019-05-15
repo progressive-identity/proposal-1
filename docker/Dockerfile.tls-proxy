@@ -1,0 +1,14 @@
+FROM golang
+
+RUN go get golang.org/x/crypto/blake2b
+
+
+WORKDIR /app
+
+COPY server.crt .
+COPY server.key .
+
+COPY tls-proxy.go .
+
+CMD ["go", "run", "tls-proxy.go"]
+

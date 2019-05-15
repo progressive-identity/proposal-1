@@ -1,0 +1,9 @@
+<ul>
+    <li>Client: <a href="/alias/order/{{tob64(order.root_hash(o['client']))}}" target="_blank"><code>{{ order.root_signer(o['client']) }}</code></a></li>
+    <li>Scopes:</li>
+    <ul>
+        {% for scope in o['scopes'] %}
+        <li><code>{{scope}}</code></li>
+        {% endfor %}
+    </ul>
+</ul>

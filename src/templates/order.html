@@ -1,0 +1,43 @@
+<html>
+    <head>
+        <title>Order {{o['type']|safe}} - {{ohb64|safe}}</title>
+    </head>
+
+    <html>
+        <h1>Order <code>{{o['type']|safe}}</code></h1>
+        <h2>General</h2>
+        <ul>
+            <li>Hash: <code>{{ohb64|safe}}</code></li>
+            <li>Signer: <code>{{signer|safe}}</code></li>
+            <li>Date: {{date|safe}}</li>
+            {% if exp %}
+            <li>{% if expired %}<b>EXPIRED</b>{% else %}Expires{% endif %} at: {{exp|safe}}</li>
+            {% endif %}
+            {%if revoked %}
+            <li><b>REVOKED</b> at {{ revocation_date }}</li>
+            {% endif %}
+            {% if order.user(o) %}
+            <li>Related to user: <code>{{order.user(o)}}</code></li>
+            {% endif %}
+        </ul>
+        <h2>Properties</h2>
+        {% if o['type'] == order.ALIAS_ACCESS %}
+        {% include 'order_access.html' %}
+        {% elif o['type'] == order.ALIAS_AUTHZ %}
+        {% include 'order_authz.html' %}
+        {% elif o['type'] == order.ALIAS_BIND %}
+        {% include 'order_bind.html' %}
+        {% elif o['type'] == order.ALIAS_CERT %}
+        {% include 'order_cert.html' %}
+        {% elif o['type'] == order.ALIAS_REGISTER %}
+        {% include 'order_register.html' %}
+        {% elif o['type'] == order.ALIAS_REVOKE %}
+        {% include 'order_revoke.html' %}
+        {% elif o['type'] == order.ALIAS_SUBKEY %}
+        {% include 'order_subkey.html' %}
+        {% endif %}
+        <h2>Raw</h2>
+        <pre>{{pretty_o}}</pre>
+    </html>
+</html>
+

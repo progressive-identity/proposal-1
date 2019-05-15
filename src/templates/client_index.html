@@ -1,0 +1,78 @@
+<html>
+    <head>
+        <title>{{ meta["name"]|safe }}</title>
+
+        <script src="static/jquery-3.4.0.min.js"></script>
+        <script src="static/alias.js"></script>
+    </head>
+
+    <html>
+        <h1>{{ meta["name"]|safe }}</h1>
+
+        <h2 id="error" ></h2>
+
+        <p>Login with your alias</p>
+        <form id="login">
+            <input id="name" placeholder="username@alias" />
+            <input type="submit" value="Link" />
+        </form>
+
+        <script>
+// XXX https
+var ALIAS_PROTO = "{{ ALIAS_PROTO|safe }}";
+var ALIAS_RE = /^(([^<>()\[\]\.,;:\s@\"]+(\.[^<>()\[\]\.,;:\s@\"]+)*)|(\".+\"))@(([^<>()[\]\.,;:\s@\"]+\.)+[^<>()[\]\.,;:\s@\"]{2,})$/i;
+
+$(function() {
+    $("#error").hide();
+
+    var aliasLogin = function(alias, cb) {
+        // extract authorization hostname
+        var match = ALIAS_RE.exec(alias);
+        if (match == null) {
+            return cb(false, "malforemd alias");
+        }
+
+        var name = match[1];
+        var domain = match[5];
+
+        // ping authorization server
+        var domain_index_url = ALIAS_PROTO + "://" + domain + "/alias/api/";
+        $.get(domain_index_url).fail(function(xhr, status_) {
+            cb(false, "not an authorization server");
+        }).done(function(info) {
+            if (!("what" in info) || info.what != "alias authorization server") {
+                return cb(false, "not an authorization server");
+            }
+
+            var args = {
+                name: name,
+                domain: domain,
+                scopes: "google.photo[date>2019].*",
+                redirect: window.location.href,
+                alias: alias,
+            };
+            var authorize_url = "/alias/authorize?" + Alias._urlencode(args);
+
+            window.location = authorize_url;
+        });
+    };
+
+    $("#login").on("submit", function(e) {
+        $("#error").hide();
+
+        var name = $("#name").val();
+        aliasLogin(name, function(ok, v) {
+            if (ok) {
+
+            } else {
+                $("#error").text(v).show();
+            }
+        });
+
+        return false;
+    });
+});
+        </script>
+    </html>
+</html>
+

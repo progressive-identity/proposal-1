@@ -1,0 +1,35 @@
+<html>
+    <head>
+        <title>Login alias</title>
+
+        {% include 'authz_head.html' %}
+    </head>
+
+    <html>
+        <h1>Login</h1>
+        {% if login_status %}
+        <h2>{{ login_status }}</h2>
+        {% endif %}
+        <p>Please login</p>
+        <form id="login" method="POST">
+            <input id="name" name="name" placeholder="username@{{ DOMAIN }}" {% if alias %}value="{{alias|safe}}" {% endif %}/>
+            <input id="pwd" name="pwd" type="password" />
+            <input type="submit" value="Login" />
+        </form>
+
+        <script>
+$(function() {
+    /*$("#login").on("submit", function(e) {
+        var alias = $("#alias").val();
+        var password = $("#password").val();
+
+        console.log(alias);
+        console.log(password);
+
+        return false;
+    });*/
+});
+        </script>
+    </html>
+</html>
+

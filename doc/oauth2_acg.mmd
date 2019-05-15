@@ -1,0 +1,25 @@
+sequenceDiagram
+    participant User Agent
+    participant Authz
+    participant Client
+    participant Rsrc
+
+    User Agent->>Authz: GET /alias/authorize?scope=%scopes%
+
+    Note over Authz: Owner grants access
+    Authz-->>User Agent: authorization token
+
+    User Agent->>Client: authorization token
+
+    Client->>+Authz: POST /alias/token?code=%authz token%
+    Authz-->>-Client: access&refresh tokens
+
+    Note over Client,Rsrc: While the access token is valid
+    Client->>+Rsrc: GET /alias/resources/...?token=%access token%
+    Rsrc-->>-Client: resource
+
+    alt Access token is outdated
+        Client->>+Authz: POST /alias/token
+        Authz-->>-Client: new access token
+    end
+

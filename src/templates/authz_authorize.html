@@ -1,0 +1,30 @@
+<html>
+    <head>
+        <title>Authorize request</title>
+
+        {% include 'authz_head.html' %}
+    </head>
+
+    <html>
+        <h1>Authorize</h1>
+
+        <p>Client <em>{{ client['name'] }}</em> is requesting access to your following data:</p>
+
+        <ul>
+            {% for s in scopes %}
+            <li>Scope <code>{{ s }}</code></li>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <p>Do you agree?</p>
+        <form method="POST">
+            <button id="agree" name="agree" value="y">I agree</button>
+            <button id="deny" name="deny" value="y">I deny</button>
+        </form>
+
+        <h2>Raw</h2>
+        <pre>{{ pformat(client)|safe }}</pre>
+    </html>
+</html>
+

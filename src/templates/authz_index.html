@@ -1,0 +1,97 @@
+<html>
+    <head>
+        <title>Authz index</title>
+
+        {% include 'authz_head.html' %}
+    </head>
+
+    <html>
+        <h1>Hello {{ user.alias }}</h1>
+        <p><a href="/alias/logout">Logout</a></p>
+
+        <h2>Info</h2>
+        <p>Your public key: <code>{{ user_k|safe }}</code></p>
+
+        <h2>Grants</h2>
+        <ul>
+        {% for k, c in clients.items() %}
+        <li>{{c['name']|safe}}: <em>{{', '.join(c['scopes'])}}</em> (
+            <a href="/alias/order/{{tob64(c['oh'])|safe}}">order</a> -
+            <a href="#" class="revoke" alias-revoke="{{tob64(c['oh'])|safe}}">revoke</a>
+        )</li>
+        {% endfor %}
+        </ul>
+
+        <h2>Resources</h2>
+
+        <ul>
+        {% for k, m in rsrc_servers.items() %}
+        <li>{{ m['domain']|safe }} (key <code>{{ k|safe }}</code>) (
+            <a href="/alias/order/{{tob64(m['oh'])|safe}}">order</a> -
+            <a href="#" class="revoke" alias-revoke="{{tob64(m['oh'])|safe}}">revoke</a>
+        )</li>
+        {% endfor %}
+        </ul>
+
+        <h2>Link authorization &lt;-&gt; resource server</h2>
+        <form id="rsrc_bind">
+            <input id="rsrc" name="rsrc" placeholder="rsrc.alias" />
+            <input type="submit" value="Bind" />
+        </form>
+
+        <h2>History</h2>
+
+        <ul>
+        {% for i in all_orders %}
+        <li>
+            <a href="/alias/order/{{tob64(i['oh'])|safe}}" target="_blank">
+                <code>{{tob64(i['oh'])|safe}} ({{i['type']|safe}})</code>
+            </a>
+            (
+            {% if i['expired'] %}<b>expired</b>{% endif %}
+            {{i['date']|safe}}
+            {% if not i['expired'] and i['exp'] %}, expires at {{i['exp']|safe}}{% endif %}
+            )
+        </li>
+        {% endfor %}
+        </ul>
+
+        <script>
+$(function() {
+    $("#rsrc_bind").on("submit", function(e) {
+        var rsrc_domain = $("#rsrc").val();
+
+        $.ajax({
+            type: "POST",
+            url: "/alias/api/bind_resource",
+            data: {
+                domain: rsrc_domain,
+            }
+        }).done(function(data) {
+            window.location.reload();
+        }).fail(function() {
+            alert("could not add resource server");
+        });
+
+        return false;
+    });
+
+    $(".revoke").click(function() {
+        var ohb64 = $(this).attr("alias-revoke");
+        $.ajax({
+            type: "POST",
+            url: "/alias/api/revoke/",
+            data: {
+                oh: ohb64,
+            },
+        }).done(function(data) {
+            console.log(data);
+        }).fail(function() {
+            alert("could not revoke order");
+        });
+    });
+});
+        </script>
+    </html>
+</html>
+

@@ -1,0 +1,19 @@
+dateutils
+flask
+flask-cors
+msgpack
+pyopenssl
+pysodium
+python-dateutil
+requests
+sqlalchemy
+
+# worker
+celery
+redis
+
+# testing
+nose
+
+# cryptographic algorithms
+ecdsa
