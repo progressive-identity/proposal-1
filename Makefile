@@ -1,6 +1,13 @@
-.PHONY: all docker static clean clean-db sandbox redirect-ports lint
+.PHONY: all docker static clean clean-db sandbox redirect-ports lint test
 
 FLAKE8_ARGS = --max-line-length 180 --ignore _
+DOCKER_RUN_SANDBOX = docker run \
+	--rm -it \
+	-v `pwd`/store-debug:/store \
+	-v `pwd`/src/templates:/templates \
+	-v `pwd`/src/static:/static \
+	-v `pwd`/src/py:/app \
+	alias/ref-python
 
 all: docker
 
@@ -21,13 +28,10 @@ up:
 	docker-compose up
 
 sandbox:
-	docker run \
-		--rm -it \
-		-v `pwd`/store-debug:/store \
-		-v `pwd`/src/templates:/templates \
-		-v `pwd`/src/static:/static \
-		-v `pwd`/src/py:/app \
-		alias/ref-python /bin/sh
+	$(DOCKER_RUN_SANDBOX) /bin/sh
+
+test:
+	$(DOCKER_RUN_SANDBOX) nosetests
 
 static: \
 	src/static/jquery-3.4.0.min.js \
