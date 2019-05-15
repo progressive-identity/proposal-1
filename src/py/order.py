@@ -4,9 +4,9 @@ import datetime
 
 import msgpack
 
-from utils import fromb64, tob64, dictargs
+from utils import dictargs
 import config
-from key import key, secretkey
+from key import key
 
 ALIAS_ACCESS = "alias/access"
 ALIAS_AUTHZ = "alias/authorize"
@@ -18,34 +18,44 @@ ALIAS_SUBKEY = "alias/key"
 
 hasher = getattr(hashlib, config.DEFAULT_HASH)
 
+
 class BaseException(Exception):
     pass
+
 
 class AlreadySignedException(BaseException):
     pass
 
+
 class InvalidSignatureException(BaseException):
     pass
+
 
 class ExpiredSignatureException(BaseException):
     pass
 
+
 class ExpiredOrderException(BaseException):
     pass
+
 
 class RevokedOrderException(BaseException):
     def __init__(self, o):
         super().__init__(format(o))
 
+
 def new(type_, **kwargs):
     kwargs['type'] = type_
     return kwargs
 
+
 def signed(o):
     return '_sig' in o
 
+
 def root_hash(x):
-    #if isinstance(o, RootHash)
+    # if isinstance(o, RootHash):
+    #   XXX
 
     if isinstance(x, str):
         return hasher(x.encode('utf-8')).digest()
@@ -88,7 +98,8 @@ def root_hash(x):
         return bytes(hasher().digest_size)
 
     else:
-        raise TypeError(type(o))
+        raise TypeError(type(x))
+
 
 def sign(o, sk, k=None, exp=None, now=None, store=None):
     if '_sig' in o:
@@ -97,7 +108,7 @@ def sign(o, sk, k=None, exp=None, now=None, store=None):
     if now is None:
         now = datetime.datetime.utcnow().timestamp()
 
-    naf = now+exp if exp is not None else None
+    naf = now + exp if exp is not None else None
 
     if k is None:
         k = sk.public().to_dict()
@@ -121,14 +132,17 @@ def sign(o, sk, k=None, exp=None, now=None, store=None):
 
     return o
 
+
 def _pack_default(x):
     if isinstance(x, _Signature):
         m = _pack([x.sig, x.order, x.proof])
         return msgpack.ExtType(_Signature.MSGPACK_EXT_ID, m)
     raise TypeError(type(x))
 
+
 def _pack(x):
     return msgpack.packb(x, default=_pack_default, use_bin_type=True)
+
 
 def _unpack_ext_hook(code, data):
     if code == _Signature.MSGPACK_EXT_ID:
@@ -143,8 +157,10 @@ def _unpack_ext_hook(code, data):
 
     return msgpack.ExtType(code, data)
 
+
 def _unpack(x):
     return msgpack.unpackb(x, ext_hook=_unpack_ext_hook, raw=False)
+
 
 class _Signature:
     MSGPACK_EXT_ID = 1
@@ -166,6 +182,7 @@ class _Signature:
 
     def verify(self):
         return key.from_dict(self.sig['k']).verify(self.proof, self._pack())
+
 
 def _raw(x):
     if x is None or isinstance(x, (str, bytes, int, float)):
@@ -193,14 +210,18 @@ def _raw(x):
     else:
         raise TypeError(type(x))
 
+
 def to_raw(x):
     return _pack(_raw(x))
+
 
 def to_token(x):
     return base64.urlsafe_b64encode(to_raw(x)).decode('ascii')
 
+
 def from_raw(x):
     return _unpack(x)
+
 
 def from_token(x, auto_check=None, store=None):
     if auto_check is None:
@@ -216,6 +237,7 @@ def from_token(x, auto_check=None, store=None):
 
     return o
 
+
 def iter_signatures(o):
     if isinstance(o, (tuple, list)):
         for i in o:
@@ -227,6 +249,7 @@ def iter_signatures(o):
 
         if signed(o):
             yield o
+
 
 def check(o, store=None, now=None):
     assert o
@@ -250,6 +273,7 @@ def check(o, store=None, now=None):
         if store.bulk_is_revoked(map(root_hash, orders)):
             raise RevokedOrderException(o)
 
+
 def expiration(o):
     def iter_expirations(o):
         # signatures expiration
@@ -262,13 +286,13 @@ def expiration(o):
         if 'naf' in o:
             yield o['naf']
 
-
     nafs = list(iter_expirations(o))
     if nafs:
         min_naf = min(nafs)
         return datetime.datetime.utcfromtimestamp(min_naf)
     else:
         return None
+
 
 def format(o):
     from copy import deepcopy
@@ -307,6 +331,7 @@ def format(o):
 
     return repr(o)
 
+
 def root_signer(o):
     if not signed(o):
         return None
@@ -316,6 +341,7 @@ def root_signer(o):
         x = x['_sig']['k']
 
     return key.from_dict(x)
+
 
 def parents(o, is_root=None):
     if is_root is None:
@@ -333,6 +359,7 @@ def parents(o, is_root=None):
             for i in o.values():
                 yield from parents(i, False)
 
+
 # Returns the root user of an order
 def user(o):
     return ({
@@ -344,14 +371,3 @@ def user(o):
         ALIAS_REVOKE: lambda o: None,
         ALIAS_SUBKEY: lambda o: None,
     })[o['type']](o)
-
-if __name__ == '__main__':
-    sk = secretkey.default().generate()
-    o = sign(order('test', foo='bar'), sk)
-    o = sign(order('test2', o2=o), sk)
-    print(o)
-    code = to_token(o)
-    print(len(code), code)
-    o2 = from_token(code)
-    assert o == o2
-

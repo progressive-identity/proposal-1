@@ -1,13 +1,12 @@
-from nose.tools import *
-
-import os
 from copy import deepcopy
 
 from key import secretkey, key
 import order
 
+
 def dummy_order():
     return order.new("test", foo={"bar": [42, b"\xde\xad\xbe\xef"]})
+
 
 def test():
     for name in secretkey.algos():
@@ -15,11 +14,12 @@ def test():
         yield do_new, sk_cls
         yield do_subkey, sk_cls
 
+
 def do_new(sk_cls):
     o = dummy_order()
     assert not order.signed(o)
-    assert order.root_signer(o) == None
-    assert order.expiration(o) == None
+    assert order.root_signer(o) is None
+    assert order.expiration(o) is None
     assert not list(order.parents(o))
     o_unsigned = deepcopy(o)
 
@@ -28,13 +28,14 @@ def do_new(sk_cls):
     assert order.signed(o)
     assert order.root_signer(o) == sk.public()
     assert o != o_unsigned
-    assert order.expiration(o) == None
+    assert order.expiration(o) is None
     assert not list(order.parents(o))
 
     raw = order.to_raw(o)
     code = order.to_token(o)
     assert order.from_raw(raw) == o
     assert order.from_token(code) == o
+
 
 def do_subkey(sk_cls):
     sk = sk_cls.generate()
@@ -44,7 +45,6 @@ def do_subkey(sk_cls):
     assert sub_sk != sk
     sub_k = sub_sk.public()
     assert sub_k != k
-
 
     sub_o = order.new(order.ALIAS_SUBKEY, **sub_k.to_dict())
     order.sign(sub_o, sk=sk)

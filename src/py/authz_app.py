@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
 
-from urllib.parse import urlencode, urljoin
-from utils import *
+from urllib.parse import urlencode
 import base64
 import datetime
 import functools
 import os
 import pprint
-import traceback
 
 from flask_cors import cross_origin
 import flask
 import requests
 
+from utils import fromb64, tob64, dictargs
 from key import secretkey, key
 import config
 import logic
 import order
+
+import authz_worker
+
+# Relative to Q&D user management
+import pysodium as sodium
+import store
+from store import sql
 
 DOMAIN = os.environ["ALIAS_DOMAIN"]
 
@@ -27,19 +33,17 @@ app = flask.Flask(
 )
 authz = None
 
-import authz_worker
 
 ###
 
-import pysodium as sodium
 class UserAlreadyExistsException(Exception):
     pass
+
 
 class UnknownUserException(Exception):
     pass
 
-import store
-from store import sql
+
 class User(store.Base):
     __tablename__ = 'user'
 
@@ -51,7 +55,6 @@ class User(store.Base):
     @classmethod
     def create(cls, alias, pwh, sk=None):
         if not sk:
-            ALGO = "ed25519"
             sk = secretkey.default().generate()
 
         return cls(
@@ -67,6 +70,7 @@ class User(store.Base):
     def user(self):
         sk = secretkey.from_str(self.sk)
         return logic.User(authz, os.environ.get("ALIAS_DB_URI"), sk)
+
 
 class UserManager:
     @staticmethod
@@ -100,8 +104,10 @@ class UserManager:
         else:
             return u
 
+
 def session_set_user(u):
     flask.session["alias"] = u.alias
+
 
 def session_current_user():
     if "alias" not in flask.session:
@@ -110,8 +116,10 @@ def session_current_user():
     alias = flask.session["alias"]
     return UserManager.get(authz.store, alias)
 
+
 def session_logout():
     flask.session.pop("alias", None)
+
 
 def logged(f):
     @functools.wraps(f)
@@ -124,18 +132,20 @@ def logged(f):
         return f(*kargs, **kwargs)
     return wrapper
 
+
 def require_login(f):
     @functools.wraps(f)
     def wrapper(*kargs, **kwargs):
         u = session_current_user()
 
         if u is None:
-            args = dict(redirect = flask.request.full_path)
+            args = dict(redirect=flask.request.full_path)
             url = f"/alias/login?" + urlencode(args)
             return flask.redirect(url, code=302)
 
         return f(*kargs, **kwargs)
     return wrapper
+
 
 def private(f):
     # XXX
@@ -143,24 +153,25 @@ def private(f):
 
 ###
 
+
 @app.route("/alias/api/")
 @cross_origin()
 def api_index():
-    user = session_current_user()
     return flask.jsonify(
-            what="alias authorization server",
-            k=str(authz.k),
+        what="alias authorization server",
+        k=str(authz.k),
     )
+
 
 @app.route("/alias/api/create", methods=["POST"])
 def api_create():
     if "pwh" not in flask.request.form:
         pwh = sodium.crypto_pwhash_str(
-                flask.request.form["pwd"],
-                #sodium.crypto_pwhash_OPSLIMIT_SENSITIVE,
-                sodium.crypto_pwhash_OPSLIMIT_MIN,
-                #sodium.crypto_pwhash_MEMLIMIT_SENSITIVE
-                sodium.crypto_pwhash_MEMLIMIT_MIN
+            flask.request.form["pwd"],
+            # sodium.crypto_pwhash_OPSLIMIT_SENSITIVE,
+            sodium.crypto_pwhash_OPSLIMIT_MIN,
+            # sodium.crypto_pwhash_MEMLIMIT_SENSITIVE
+            sodium.crypto_pwhash_MEMLIMIT_MIN
         ).decode('ascii')
 
     else:
@@ -171,14 +182,15 @@ def api_create():
 
     except UserAlreadyExistsException:
         return flask.jsonify(
-                status="error_user_already_exists",
+            status="error_user_already_exists",
         )
 
     else:
         session_set_user(u)
         return flask.jsonify(
-                status="ok",
+            status="ok",
         )
+
 
 @app.route("/alias/api/login", methods=["POST"])
 def api_login():
@@ -192,10 +204,12 @@ def api_login():
         session_set_user(user)
         return flask.jsonify(status="ok", user=user.alias)
 
+
 @app.route("/alias/api/logout", methods=["POST"])
 def api_logout():
     session_logout()
     return flask.jsonify(status="ok")
+
 
 @app.route("/alias/api/bind_resource", methods=["POST"])
 @logged
@@ -206,15 +220,14 @@ def api_bind_rsrc():
     domain = flask.request.form['domain']
 
     # ping
-    do_not_verify = os.environ.get("FLASK_DEBUG", "n")=="y"
+    do_not_verify = os.environ.get("FLASK_DEBUG", "n") == "y"
     if do_not_verify:
         print("XXX SSL certificates are not check!", flush=True)
 
-    resp = requests.get(f"{config.ALIAS_PROTO}://{domain}/alias/api/",
-        verify = not do_not_verify
-    )
+    resp = requests.get(f"{config.ALIAS_PROTO}://{domain}/alias/api/", verify=not do_not_verify)
     if not resp.ok:
         return flask.jsonify(state="error", error="unreachable domain")
+
     resp = resp.json()
     rsrc_k_dict = key.from_str(resp['k']).to_dict()
     rsrc_k_dict['domain'] = domain
@@ -225,19 +238,21 @@ def api_bind_rsrc():
     # Send bind token
     args = dict(code=bind_token)
     resp = requests.post(f"{config.ALIAS_PROTO}://{domain}/alias/api/bind/",
-            data=args,
-        verify = not do_not_verify,
-    )
+                         data=args,
+                         verify=not do_not_verify,
+                         )
     if not resp.ok:
         return flask.jsonify(state="error", error="bind failed"), 500
 
     authz.bound(bind_token)
     return flask.jsonify(state="success")
 
+
 @app.route("/alias/api/debug/")
 def api_debug():
     r = authz_worker.ping.delay()
     return flask.jsonify(r=repr(r))
+
 
 @app.route("/alias/api/debug/dump/")
 def api_debug_dump():
@@ -245,6 +260,7 @@ def api_debug_dump():
     u = session_current_user()
     r['user'] = u.user().store.dump() if u else None
     return flask.Response(pprint.pformat(r), content_type="text/plain")
+
 
 @app.route("/alias/api/revoke/", methods=["POST"])
 @logged
@@ -265,6 +281,7 @@ def api_revoke():
     authz.store.store_order(authz.from_token(code))
 
     return flask.jsonify(status="ok", code=code)
+
 
 @app.route("/alias/api/revoked/", methods=["POST"])
 def api_revoked():
@@ -289,6 +306,7 @@ def api_confirm_revoked():
 
     return flask.jsonify(state="ok")
 
+
 @app.route("/alias/api/revocations/")
 def api_revocations():
     r = authz.pending_revocations()
@@ -308,9 +326,11 @@ def api_revocations():
 
 ###
 
+
 @app.route('/alias/static/<path:path>')
 def route_static(path):
     return flask.send_from_directory(app.static_folder, path)
+
 
 @app.route('/')
 @app.route('/alias')
@@ -333,10 +353,10 @@ def index():
             o2 = user.get_order(oh)
             assert o == o2
             c = dict(
-                name = client_o['name'],
-                desc = client_o['desc'],
-                oh = oh,
-                scopes = set()
+                name=client_o['name'],
+                desc=client_o['desc'],
+                oh=oh,
+                scopes=set()
             )
             clients[client_id] = c
 
@@ -352,19 +372,20 @@ def index():
         )
 
         e['exp'] = exp
-        e['expired'] = now>=exp if exp else False
+        e['expired'] = now >= exp if exp else False
 
         all_orders.append(e)
 
     return flask.render_template('authz_index.html',
-        DOMAIN = DOMAIN,
-        user = u,
-        rsrc_servers = rsrc_servers,
-        clients = clients,
-        user_k = str(user.k),
-        tob64=tob64,
-        all_orders=all_orders,
-    )
+                                 DOMAIN=DOMAIN,
+                                 all_orders=all_orders,
+                                 clients=clients,
+                                 rsrc_servers=rsrc_servers,
+                                 tob64=tob64,
+                                 user=u,
+                                 user_k=str(user.k),
+                                 )
+
 
 @app.route("/alias/login", methods=["GET", "POST"])
 def login():
@@ -385,10 +406,11 @@ def login():
                 return flask.redirect(redirect_url, code=302)
 
     return flask.render_template("authz_login.html",
-        DOMAIN = DOMAIN,
-        login_status = login_status,
-        alias = flask.request.args.get("alias"),
-    )
+                                 DOMAIN=DOMAIN,
+                                 alias=flask.request.args.get("alias"),
+                                 login_status=login_status,
+                                 )
+
 
 @app.route("/alias/logout")
 def logout():
@@ -417,8 +439,7 @@ def authorize():
 
     try:
         client_o, scopes = authz.parse_request(flask.request.args)
-
-    except:
+    except Exception:   # XXX what exceptions?
         return redirect_error("invalid_request")
 
     if client_o['redirect_uri'] != redirect_uri:
@@ -442,11 +463,12 @@ def authorize():
         return redirect(code=grant_code, state=state)
 
     return flask.render_template("authz_authorize.html",
-        client = client_o,
-        scopes = sorted(scopes),
-        alias = alias,
-        pformat = pprint.pformat,
-    )
+                                 client=client_o,
+                                 scopes=sorted(scopes),
+                                 alias=alias,
+                                 pformat=pprint.pformat,
+                                 )
+
 
 @app.route('/alias/token', methods=['POST'])
 def token():
@@ -455,6 +477,7 @@ def token():
 
     token_resp = authz.token(**flask.request.form)
     return flask.jsonify(**token_resp)
+
 
 @app.route("/alias/order/<ohb64>")
 @require_login
@@ -468,8 +491,8 @@ def get_order(ohb64):
     o, m = user.get_all_order(oh)
     exp = m['expiration']
     revocation_date = m['revocation_date']
-    expired = exp and now>=exp
-    revoked = revocation_date and now>=revocation_date
+    expired = exp and now >= exp
+    revoked = revocation_date and now >= revocation_date
 
     if not o:
         return flask.abort(404)
@@ -478,9 +501,10 @@ def get_order(ohb64):
     date = datetime.datetime.utcfromtimestamp(o['_sig']['dat'])
 
     def indent(i):
-        return '  '*i
+        return '  ' * i
+
     def pretty(o, idt=0):
-        is_root = idt==0
+        is_root = idt == 0
 
         if is_root:
             o = dict(o)
@@ -489,8 +513,8 @@ def get_order(ohb64):
         if isinstance(o, (list, tuple)):
             yield '[\n'
             for i in o:
-                yield indent(idt+1)
-                yield from pretty(i, idt+1)
+                yield indent(idt + 1)
+                yield from pretty(i, idt + 1)
                 yield ",\n"
             yield indent(idt) + ']'
 
@@ -502,8 +526,8 @@ def get_order(ohb64):
             else:
                 yield '{\n'
                 for k, v in o.items():
-                    yield indent(idt+1) + repr(k) + ': '
-                    yield from pretty(v, idt+1)
+                    yield indent(idt + 1) + repr(k) + ': '
+                    yield from pretty(v, idt + 1)
                     yield ",\n"
                 yield indent(idt) + '}'
 
@@ -513,26 +537,28 @@ def get_order(ohb64):
     pretty_o = flask.Markup("".join(pretty(o)))
 
     return flask.render_template('order.html',
-        date=date,
-        exp=exp,
-        expired=expired,
-        key=key,
-        o=o,
-        ohb64=ohb64,
-        order=order,
-        pformat=pprint.pformat,
-        pretty_o=pretty_o,
-        revocation_date=revocation_date,
-        revoked=revoked,
-        signer=signer,
-        sorted=sorted,
-        tob64=tob64,
-    )
+                                 date=date,
+                                 exp=exp,
+                                 expired=expired,
+                                 key=key,
+                                 o=o,
+                                 ohb64=ohb64,
+                                 order=order,
+                                 pformat=pprint.pformat,
+                                 pretty_o=pretty_o,
+                                 revocation_date=revocation_date,
+                                 revoked=revoked,
+                                 signer=signer,
+                                 sorted=sorted,
+                                 tob64=tob64,
+                                 )
+
 
 def run():
     global authz
 
-    import utils; utils.prepare_log()
+    import utils
+    utils.prepare_log()
 
     sk = secretkey.from_str(os.environ["ALIAS_SK"])
     authz = logic.Authorization(
@@ -545,6 +571,6 @@ def run():
 
     app.run(host="0.0.0.0", port=80)
 
+
 if __name__ == '__main__':
     run()
-

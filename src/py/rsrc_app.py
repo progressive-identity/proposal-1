@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 
-from utils import *
 import base64
-import functools
-import os
-import pprint
-import traceback
-import json
 import datetime
+import json
+import os
+import re
 
 import flask
 from flask_cors import cross_origin
 
-from key import key, secretkey
+from key import secretkey
 import logic
 import index
 
@@ -24,6 +21,7 @@ app = flask.Flask(
 
 rsrc = None
 
+
 @app.route("/alias/api/")
 @cross_origin()
 def api_index():
@@ -32,16 +30,19 @@ def api_index():
         k=str(rsrc.k),
     )
 
+
 @app.route("/alias/api/debug/dump")
 def api_dump():
     from pprint import pformat
     return flask.Response(pformat(rsrc.store.dump()), content_type="text/plain")
+
 
 @app.route("/alias/api/debug")
 def api_debug():
     return flask.jsonify(headers=dict(flask.request.headers))
 
 ###
+
 
 def parse_args(args):
     if not args:
@@ -56,6 +57,7 @@ def parse_args(args):
 
     return d
 
+
 def parse_scope(scope):
     RE = re.compile(r"^(?P<scope>[a-zA-Z\.]+)(\[(?P<args>[a-zA-Z0-9,=&|\(\)]+)\])?$")
 
@@ -69,6 +71,7 @@ def parse_scope(scope):
 
     return m['scope'], args
 
+
 def match_meta(meta, args):
     for k, v in args.items():
         if k not in meta or meta[k] != v:
@@ -76,7 +79,6 @@ def match_meta(meta, args):
 
     return True
 
-#def iter_index(scope):
 
 @app.route('/alias/api/bind/', methods=['POST'])
 def api_bind():
@@ -85,20 +87,23 @@ def api_bind():
 
     return flask.jsonify(state="success")
 
+
 @app.route("/alias/api/revoked/", methods=["POST"])
 def api_revoked():
     code = flask.request.form["code"]
     try:
         rsrc.revoked(code)
 
-    except:
-        import traceback; print(traceback.format_exc(), flush=True)
+    except Exception:
+        import traceback
+        print(traceback.format_exc(), flush=True)
 
-    #except logic.UnknownRevokationPartyException:
+    # except logic.UnknownRevokationPartyException:
     #    return flask.jsonify(state="error", error="unknown revokation party"), 400
 
     else:
         return flask.jsonify(state="ok")
+
 
 @app.route('/alias/resource/<provider>')
 def resource(provider):
@@ -116,9 +121,8 @@ def resource(provider):
         return flask.abort(404)
 
     user = str(user_root_k)
-    #user = base64.urlsafe_b64encode(user_root_k).decode('ascii')
-
     provider_path = os.path.join("/rsrc", user, provider)
+
     def json_default(v):
         if isinstance(v, datetime.datetime):
             return v.isoformat()
@@ -140,6 +144,7 @@ def resource(provider):
         yield ']'
 
     return flask.Response(generate(), mimetype='application/json')
+
 
 @app.route('/alias/<provider>/<hhuman>')
 def query_blob(provider, hhuman):
@@ -178,15 +183,17 @@ def query_blob(provider, hhuman):
 
                     yield chunk
 
-        return flask.Response(generate(64*1024), mimetype=mimetype)
+        return flask.Response(generate(64 * 1024), mimetype=mimetype)
 
     else:
         return flask.abort(404)
 
+
 def run():
     global rsrc
 
-    import utils; utils.prepare_log()
+    import utils
+    utils.prepare_log()
 
     sk = secretkey.from_str(os.environ["ALIAS_SK"])
     rsrc = logic.Resource(
@@ -198,7 +205,3 @@ def run():
     app.secret_key = base64.b64decode(os.environ["FLASK_SECRET_KEY"].encode('utf-8'))
 
     app.run(host="0.0.0.0", port=80)
-
-if __name__ == '__main__':
-    run()
-

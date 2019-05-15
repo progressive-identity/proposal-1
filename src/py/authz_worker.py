@@ -9,9 +9,11 @@ from key import key
 
 app = Celery('authz_worker', broker=os.environ['ALIAS_AUTHZ_BROKER'])
 
+
 @app.task
 def ping():
     print('Hello, World! :-)', flush=True)
+
 
 def broadcast_one_revocation(h, code, k, domain):
     url = f"{config.ALIAS_PROTO}://{domain}/alias/api/revoked/"
@@ -35,6 +37,7 @@ def broadcast_one_revocation(h, code, k, domain):
 
     print(r, flush=True)
 
+
 @app.task
 def broadcast_revocations(r):
     for i in r:
@@ -44,4 +47,3 @@ def broadcast_revocations(r):
             key.from_str(i['k']),
             i['domain'],
         )
-

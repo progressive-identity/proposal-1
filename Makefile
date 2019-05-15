@@ -1,4 +1,6 @@
-.PHONY: all docker static clean clean-db sandbox redirect-ports
+.PHONY: all docker static clean clean-db sandbox redirect-ports lint
+
+FLAKE8_ARGS = --max-line-length 180 --ignore _
 
 all: docker
 
@@ -43,4 +45,7 @@ redirect-ports:
 		-R 0.0.0.0:8102:127.0.1.2:80 \
 		-R 0.0.0.0:8103:127.0.1.3:443 \
 		cocoon.s.gawen.me
+
+lint:
+	flake8 $(FLAKE8_ARGS) src/py
 

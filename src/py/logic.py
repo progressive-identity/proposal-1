@@ -2,7 +2,7 @@ import logging
 import datetime
 
 from key import key, secretkey
-from utils import *
+from utils import dictargs
 import box
 import certificate
 import config
@@ -10,20 +10,26 @@ import order
 import scope
 import store
 
+
 class LogicException(Exception):
     pass
+
 
 class UnknownRevokationPartyException(LogicException):
     pass
 
+
 class ResourceException(LogicException):
     pass
+
 
 class ResourceBadCertificateException(ResourceException):
     pass
 
+
 class UnknownUserAuthzException(ResourceException):
     pass
+
 
 class Base:
     def __init__(self, db_uri, sk_or_k):
@@ -95,8 +101,8 @@ class Base:
     def tls_certificate(self, cert):
         algo = config.DEFAULT_HASH
         o = order.new(order.ALIAS_CERT,
-            finger=list(certificate.fingerprint(cert, algo)),
-        )
+                      finger=list(certificate.fingerprint(cert, algo)),
+                      )
         self.sign(o)
         # XXX expiration !
         return order.to_token(o)
@@ -108,9 +114,9 @@ class Base:
         assert order.root_signer(o) == self.k
 
         o = order.new(order.ALIAS_REVOKE,
-            h=order.root_hash(o),
-            date=date,
-        )
+                      h=order.root_hash(o),
+                      date=date,
+                      )
         self.sign(o)
 
         return order.to_token(o)
@@ -143,6 +149,7 @@ class Base:
     def pending_revocations(self, **kwargs):
         return self.store.pending_revocations(self_k=self.k, **kwargs)
 
+
 class BaseUserServer(Base):
     def __init__(self, domain, db_uri, sk):
         super().__init__(db_uri, sk)
@@ -164,6 +171,7 @@ class BaseUserServer(Base):
 
         self.store.store_order(o)
 
+
 class User(Base):
     PREFIX = "user"
 
@@ -177,9 +185,9 @@ class User(Base):
         assert 'raw' in rsrc and 'alg' in rsrc and 'domain' in rsrc
 
         o = order.new(order.ALIAS_BIND,
-            rsrc=rsrc,
-            authz=authz,
-        )
+                      rsrc=rsrc,
+                      authz=authz,
+                      )
         self.root_sign(o)
 
         return order.to_token(o)
@@ -190,10 +198,10 @@ class User(Base):
         client_o = self.from_token(args['client_id'])
 
         o = order.new(order.ALIAS_AUTHZ,
-            client=client_o,
-            redirect_uri=args['redirect_uri'],
-            scopes=scope.split(args['scopes']),
-        )
+                      client=client_o,
+                      redirect_uri=args['redirect_uri'],
+                      scopes=scope.split(args['scopes']),
+                      )
         self.sign(o)
 
         return order.to_token(o)
@@ -213,6 +221,7 @@ class User(Base):
 
     def iter_grants(self):
         return self.store.iter_user_grants(self.k)
+
 
 class Resource(BaseUserServer):
     PREFIX = "rsrc"
@@ -244,6 +253,7 @@ class Resource(BaseUserServer):
         # client has the necessary credentials to access user's data over certain scopes
         return user_k, scopes
 
+
 class Authorization(BaseUserServer):
     PREFIX = "authz"
 
@@ -268,10 +278,10 @@ class Authorization(BaseUserServer):
         now = datetime.datetime.utcnow()
         naf = now + datetime.timedelta(seconds=config.DEFAULT_ACCESS_TOKEN_TIMEOUT)
         access_o = order.new(order.ALIAS_ACCESS,
-            grant=grant_o,
-            cert=cert_o,
-            naf=naf.timestamp(),
-        )
+                             grant=grant_o,
+                             cert=cert_o,
+                             naf=naf.timestamp(),
+                             )
         self.sign(access_o)
         expires_in = (order.expiration(access_o) - now).total_seconds()
 
@@ -289,11 +299,11 @@ class Authorization(BaseUserServer):
             rsrcs = [o['rsrc']['domain']]
 
         return dictargs(
-                access_token = order.to_token(access_o),
-                token_type = "bearer",
-                expires_in = expires_in,
-                scopes = access_o['grant']['scopes'],
-                rsrcs = rsrcs,
+            access_token=order.to_token(access_o),
+            token_type="bearer",
+            expires_in=expires_in,
+            scopes=access_o['grant']['scopes'],
+            rsrcs=rsrcs,
         )
 
     def parse_request(self, args):
@@ -303,6 +313,7 @@ class Authorization(BaseUserServer):
         scopes = scope.split(args['scopes'])
 
         return client_o, scopes
+
 
 class Client(Base):
     PREFIX = "client"
@@ -328,22 +339,21 @@ class Client(Base):
         state_o = self.boxer.encrypt(state) if state else None
 
         return dictargs(
-                alias = alias,
-                client_id = self.id(),
-                redirect_uri = self.meta['redirect_uri'],
-                response_type = 'code',
-                scopes = scopes,
-                state = state_o,
+            alias=alias,
+            client_id=self.id(),
+            redirect_uri=self.meta['redirect_uri'],
+            response_type='code',
+            scopes=scopes,
+            state=state_o,
         )
 
     def token_args(self, code, cert_token=None):
         code_o = self.from_token(code)
 
         return dictargs(
-                grant_type = 'authorization_code',
-                code = code,
-                redirect_uri = code_o.get('redirect_uri'),
-                client_id = self.id(),
-                cert=cert_token,
+            grant_type='authorization_code',
+            code=code,
+            redirect_uri=code_o.get('redirect_uri'),
+            client_id=self.id(),
+            cert=cert_token,
         )
-

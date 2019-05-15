@@ -8,6 +8,7 @@ import re
 
 import msgpack
 
+
 def hashfile(func, fh):
     h = func()
     while True:
@@ -27,6 +28,7 @@ class Collection:
 
     def __repr__(self):
         return f"<alias.Collection {self.fname!r}>"
+
 
 class File:
     def __init__(self, path, hashname=None, _hash=None, mimetype=None):
@@ -54,10 +56,12 @@ class File:
     def guess_mimetype(self):
         return mimetypes.guess_type(self.path)
 
+
 MSGPACK_EXT_TYPES = [
     Collection,
     File,
 ]
+
 
 def encode(v):
     if isinstance(v, datetime.datetime) or isinstance(v, datetime.date):
@@ -65,8 +69,8 @@ def encode(v):
 
     elif isinstance(v, Collection):
         return msgpack.ExtType(
-                MSGPACK_EXT_TYPES.index(Collection),
-                packb(v.fname)
+            MSGPACK_EXT_TYPES.index(Collection),
+            packb(v.fname)
         )
 
     elif isinstance(v, File):
@@ -74,14 +78,15 @@ def encode(v):
             'path': v.path,
             'hashname': v.hashname,
             'hash': v.hash(),
-            }
+        }
 
         return msgpack.ExtType(
-                MSGPACK_EXT_TYPES.index(File),
-                packb(obj)
+            MSGPACK_EXT_TYPES.index(File),
+            packb(obj)
         )
 
     return v
+
 
 def ext_hook(code, raw):
     if code == MSGPACK_EXT_TYPES.index(Collection):
@@ -94,20 +99,26 @@ def ext_hook(code, raw):
 
     return msgpack.ExtType(code, raw)
 
+
 def packb(v):
     return msgpack.packb(v, default=encode, use_bin_type=True)
+
 
 def unpackb(v):
     return msgpack.unpackb(v, ext_hook=ext_hook, raw=False)
 
+
 def unpacker(fh):
     return msgpack.Unpacker(fh, ext_hook=ext_hook, raw=False)
+
 
 def get_index_path(root_path, *kargs):
     return os.path.join(root_path, "index", *kargs)
 
+
 def compress(fpath):
     os.system(f'xz -f -T 0 "{fpath}"')
+
 
 class Index:
     def __init__(self, root_path, scope):
@@ -117,20 +128,24 @@ class Index:
         self.fh = None
         self.entries = 0
 
+
 def walk(obj, cb):
     r = cb(obj)
-    if r: return r
-
+    if r:
+        return r
 
     if isinstance(obj, dict):
         for v in obj.values():
             r = walk(v, cb)
-            if r: return r
+            if r:
+                return r
 
     elif isinstance(obj, (list, tuple)):
         for i in obj:
             r = walk(i, cb)
-            if r: return r
+            if r:
+                return r
+
 
 def dump(root_path, it):
     indexes = {}
@@ -182,6 +197,7 @@ def dump(root_path, it):
     with open(get_index_path(root_path, "root"), "wb") as fh:
         fh.write(packb(root_obj))
 
+
 def full_load(root_path):
     with open(get_index_path(root_path, "root"), "rb") as fh:
         r = unpackb(fh.read())
@@ -221,6 +237,7 @@ def full_load(root_path):
 
     return r
 
+
 def parse_scope(scope):
     # XXX implemet better parsing
 
@@ -252,11 +269,14 @@ def parse_scope(scope):
                 '!=': lambda a, b: a != b,
             }[op]
 
-            conds2.append(lambda obj,k=k,op=op,v=v: k in obj and op(obj[k], v))
+            conds2.append(lambda obj, k=k, op=op, v=v: k in obj and op(obj[k], v))
 
-        conds = lambda obj: all(cond(obj) for cond in conds2)
+        def conds(obj):
+            return all(cond(obj) for cond in conds2)
+
     else:
-        conds = lambda obj: True
+        def conds(obj):
+            return True
 
     if fields != '*':
         if fields[0] == '{' and fields[-1] == '}':
@@ -266,6 +286,7 @@ def parse_scope(scope):
 
     return base, conds, fields
 
+
 def update_fields(dst, src, fields):
     if fields == '*':
         dst.update(src)
@@ -273,6 +294,7 @@ def update_fields(dst, src, fields):
         for f in fields:
             if f in src:
                 dst[f] = src[f]
+
 
 def query(root_path, scopes):
     scopes = [parse_scope(scope) for scope in scopes]
@@ -300,11 +322,11 @@ def query(root_path, scopes):
                 r = {}
                 for cond, fields in scopes:
                     if cond(obj):
-                        authz = True
                         update_fields(r, obj, fields)
 
                 if r:
                     yield fname, r
+
 
 def query_blob(root_path, scopes, hname, h):
     def walker(v):
@@ -316,7 +338,9 @@ def query_blob(root_path, scopes, hname, h):
 
     for scope, obj in query(root_path, scopes):
         f = walk(obj, walker)
-        if f: return f
+        if f:
+            return f
+
 
 def json_dumps(obj, **kwargs):
     import json
@@ -342,10 +366,10 @@ def json_dumps(obj, **kwargs):
         elif isinstance(v, bytes):
             return base64.b64encode(v).decode('utf-8')
 
-
         raise TypeError(f"invalid type: {type(v)}")
 
     return json.dumps(obj, default=json_default, **kwargs)
+
 
 def main():
     import sys
@@ -359,6 +383,6 @@ def main():
 
     print(f"{count} result(s)", file=sys.stderr)
 
+
 if __name__ == '__main__':
     main()
-

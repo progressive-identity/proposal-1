@@ -1,7 +1,8 @@
 import json
 import base64
 
-import pysodium as sodium
+# import pysodium as sodium
+
 
 class Boxer:
     def __init__(self, sk=None):
@@ -17,4 +18,3 @@ class Boxer:
         o_json = base64.b64decode(code.encode('ascii')).decode('utf-8')
         o = json.loads(o_json)
         return o
-

@@ -4,14 +4,18 @@ import hashlib
 from utils import tob64, fromb64
 import config
 
+
 class KeyException(Exception):
     pass
+
 
 class UnknownAlgorithmException(KeyException):
     pass
 
+
 class MalformedKeyException(KeyException):
     pass
+
 
 class key:
     STR_RE = re.compile(r"(?P<kb64>[a-zA-Z0-9_-]+)\.(?P<algo>[a-z0-9]+)")
@@ -62,6 +66,7 @@ class key:
     def __hash__(self):
         return hash((self.NAME, self.raw))
 
+
 class secretkey:
     STR_RE = re.compile(r"(?P<kb64>[a-zA-Z0-9_-]+)\.(?P<algo>[a-z0-9]+)\.secret")
 
@@ -108,8 +113,8 @@ class secretkey:
     def __hash__(self):
         return hash((self.NAME, self.raw))
 
-## secp256k1 + sha256
 
+# secp256k1 + sha256
 try:
     import ecdsa
 
@@ -129,8 +134,8 @@ else:
             return cls(sk)
 
         def public(self):
-             k = self._h.get_verifying_key().to_string()
-             return secp256k1_key(k)
+            k = self._h.get_verifying_key().to_string()
+            return secp256k1_key(k)
 
         def __init__(self, raw):
             super().__init__(raw)
@@ -199,6 +204,7 @@ else:
             else:
                 return True
 
+
 def use_sk(path):
     try:
         with open(path, "r") as fh:
@@ -211,9 +217,3 @@ def use_sk(path):
             fh.write(str(sk))
 
         return sk
-
-if __name__ == '__main__':
-    sk = secretkey.default().generate()
-    k = sk.public()
-    print(sk, k)
-

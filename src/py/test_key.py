@@ -1,14 +1,16 @@
-from nose.tools import *
+from nose.tools import raises
 
 import os
 
 import key
+
 
 def test_algo():
     assert list(key.key.algos()) == list(key.secretkey.algos())
 
     for name in key.secretkey.algos():
         yield from do_algo(name)
+
 
 def do_algo(name):
     sk_cls = key.secretkey.from_algo(name)
@@ -28,6 +30,7 @@ def do_algo(name):
     for _ in range(4):
         yield do_sign_verify, sk, k
 
+
 def do_sign_verify(sk, k):
     buf = os.urandom(1024)
     proof = sk.sign(buf)
@@ -38,19 +41,22 @@ def do_sign_verify(sk, k):
 
     assert not k.verify(proof, buf2)
 
+
 @raises(key.UnknownAlgorithmException)
 def test_unknown_algo_sk():
     key.secretkey.from_algo("foo")
+
 
 @raises(key.UnknownAlgorithmException)
 def test_unknown_algo_k():
     key.key.from_algo("foo")
 
+
 @raises(key.MalformedKeyException)
 def test_malformed_sk():
     key.secretkey.from_str("foo")
 
+
 @raises(key.MalformedKeyException)
 def test_malformed_k():
     key.key.from_str("foo")
-
