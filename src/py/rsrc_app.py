@@ -205,3 +205,7 @@ def run():
     app.secret_key = base64.b64decode(os.environ["FLASK_SECRET_KEY"].encode('utf-8'))
 
     app.run(host="0.0.0.0", port=80)
+
+
+if __name__ == '__main__':
+    run()
