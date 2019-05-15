@@ -43,13 +43,6 @@ src/static/jquery-3.4.0.min.js:
 src/static/libsodium.js:
 	wget -O $@ https://raw.githubusercontent.com/jedisct1/libsodium.js/master/dist/browsers/sodium.js
 
-redirect-ports:
-	ssh -N -v \
-		-R 0.0.0.0:8101:127.0.1.1:80 \
-		-R 0.0.0.0:8102:127.0.1.2:80 \
-		-R 0.0.0.0:8103:127.0.1.3:443 \
-		cocoon.s.gawen.me
-
 lint:
 	flake8 $(FLAKE8_ARGS) src/py
 
