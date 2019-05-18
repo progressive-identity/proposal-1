@@ -3,7 +3,9 @@ Backend is mainly in Python & Go.
 
 ### Summary
 
-Alias is a protocol based on OAuth 2.0 enabling decentralized data export authorizations. When implmented, Alias enables for users to decide to share the data they want, to whom they want, without limitations from any Identity Provider and in fine grained control.
+Alias is a protocol enabling decentralized data export authorizations. When implemented, Alias enables for users to decide to share the data they want, to whom they want, without limitations from any centralized Identity Provider and in fine grained control.
+
+Technically, Alias is a decentralized protocol based on OAuth 2.0, where each user, identified by an cryptographic alias, can let third-parties ("clients") access to their data stored in  servers ("resource servers").
 
 Here's a [technical summary of the core concepts of Alias](https://github.com/progressive-identity/sandbox/blob/master/doc/SUMMARY)
 
