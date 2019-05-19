@@ -8,6 +8,7 @@ Alias is a protocol enabling decentralized data export authorizations. When impl
 Technically, Alias is a decentralized protocol based on OAuth 2.0, where each user, identified by an cryptographic alias, can let third-parties ("clients") access to their data stored in  servers ("resource servers"). Access to the data is controlled by an Authorization server ("authorization servers") that manages permissions and scopes. 
 The main innovation of Alias is that the resource server and the authorization server do not need to be behind the same firewall, enabling users to decide freely and in full control who store their data and who manage permissions in a decentralized way.
 
+
 Here's a [technical summary of the core concepts of Alias](https://github.com/progressive-identity/sandbox/blob/master/doc/SUMMARY)
 
 ### Alias : Adding decentralization of data portability to OAuth2.0
@@ -18,10 +19,10 @@ Because of new regulations about data portability (GDPR in Europe and CCPA in Ca
 
 As we seen in Bitcoin, a large majority of users will still want to delegate authorizations to a trusted 3rd-party to manage permissions, as they do untill today with banks for their money, or to wallet managers for their Bitcoins/Crytocurrencies. In the Alias protocol ecosystem,users decide where their data is stored (on the server of their choice) and decide the Alias authorization server that will manage its permissions.
 
-### Alias vision about Identity
+### Alias manifesto for a *Progressive Identity*
 
 To understand the decentralized identity challenge Alias is tackling, please read our [Manifesto for a Progressive Identity](https://github.com/progressive-identity/ref/wiki/Manifesto-for-a-Progressive-Identity).
 
-### Expected Roadmap
+### Expected Alias Roadmap
 
 Here's a [summary of the implementation next steps for ALIAS to achieve personal data authorization decentralization](https://github.com/progressive-identity/ref/wiki/Roadmap-of-ALIAS-protocol-delivery)
