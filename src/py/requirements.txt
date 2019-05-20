@@ -12,6 +12,10 @@ sqlalchemy
 celery
 redis
 
+# explorer
+redis
+flask_session
+
 # testing
 nose
 

@@ -9,68 +9,70 @@
     <html>
         <h1>{{ meta["name"]|safe }}</h1>
 
-        <h2 id="error" ></h2>
+        {% if grants %}
+        <h2>Grants</h2>
+        <ul>
+            {% for k, v in grants %}
+            <li><a href="/grant/{{k}}">
+                <code>{{k}}</code></a>:
+                scopes <code>{{", ".join(v['grant_o']['scopes'])}}</code>
+                for user <code>{{v['alias']['user']}}@{{v['alias']['domain']}}</code>
+                at {{v['date']}}
+            </li>
+        {% endfor %}
+        </ul>
+        {% endif %}
 
-        <p>Login with your alias</p>
+        <button id="clear_all_grants">Clear all grants</button>
+
+        <h2>Request new grant</h2>
+        <h3 id="error" style="color: red;"></h3>
         <form id="login">
             <input id="name" placeholder="username@alias" />
-            <input type="submit" value="Link" />
+            <input id="scopes" placeholder="provider.resource.*" />
+            <input type="submit" value="Browse" />
         </form>
 
         <script>
-// XXX https
-var ALIAS_PROTO = "{{ ALIAS_PROTO|safe }}";
-var ALIAS_RE = /^(([^<>()\[\]\.,;:\s@\"]+(\.[^<>()\[\]\.,;:\s@\"]+)*)|(\".+\"))@(([^<>()[\]\.,;:\s@\"]+\.)+[^<>()[\]\.,;:\s@\"]{2,})$/i;
+$("#login").on("submit", function(e) {
+    $("#error").hide();
+
+    $.ajax({
+        method: 'POST',
+        url: '/grant',
+        data: {
+            name: $("#name").val(),
+            scopes: $("#scopes").val(),
+        },
+    }).done(function(r) {
+        if (r.state == "error") {
+            $("#error").text("error: " + r.reason).show();
+            return;
+        }
+
+        window.location = r.url;
+
+    }).fail(function() {
+        $("#error").text("error: cannot reach server").show();
+    });
+
+    return false;
+});
+
+$("#clear_all_grants").click(function() {
+    $.ajax({
+        url: "/clear_grants",
+        method: 'POST'
+    }).done(function() {
+        window.location.reload();
+    }).fail(function() {
+        alert("server error");
+    });
+});
+
 
 $(function() {
     $("#error").hide();
-
-    var aliasLogin = function(alias, cb) {
-        // extract authorization hostname
-        var match = ALIAS_RE.exec(alias);
-        if (match == null) {
-            return cb(false, "malforemd alias");
-        }
-
-        var name = match[1];
-        var domain = match[5];
-
-        // ping authorization server
-        var domain_index_url = ALIAS_PROTO + "://" + domain + "/alias/api/";
-        $.get(domain_index_url).fail(function(xhr, status_) {
-            cb(false, "not an authorization server");
-        }).done(function(info) {
-            if (!("what" in info) || info.what != "alias authorization server") {
-                return cb(false, "not an authorization server");
-            }
-
-            var args = {
-                name: name,
-                domain: domain,
-                scopes: "google.photo[date>2019].*",
-                redirect: window.location.href,
-                alias: alias,
-            };
-            var authorize_url = "/alias/authorize?" + Alias._urlencode(args);
-
-            window.location = authorize_url;
-        });
-    };
-
-    $("#login").on("submit", function(e) {
-        $("#error").hide();
-
-        var name = $("#name").val();
-        aliasLogin(name, function(ok, v) {
-            if (ok) {
-
-            } else {
-                $("#error").text(v).show();
-            }
-        });
-
-        return false;
-    });
 });
         </script>
     </html>

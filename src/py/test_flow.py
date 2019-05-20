@@ -21,6 +21,9 @@ def test_flow():
 
     DB_URI = "sqlite:///:memory:"
 
+    AUTHZ_DOMAIN = "authz.alias"
+    NAME = "foo@" + AUTHZ_DOMAIN
+
     # Initialize all parties
     rsrc = logic.Resource('rsrc.alias', DB_URI, secretkey.default().generate())
     authz = logic.Authorization('authz.alias', DB_URI, secretkey.default().generate())
@@ -38,7 +41,7 @@ def test_flow():
         assert user.store.is_bound(user.k, authz.k, rsrc.k)
 
     # Client asks user for authorization and user grants
-    request_args = client.request_args(["google.photos.*"])
+    _, request_args = client.authorize(NAME, ["google.photos.*"])
     grant_code = user.authorize(request_args)
     print("grant_code", len(grant_code))
     # pprint(order.deserialize(grant_code))
@@ -49,7 +52,7 @@ def test_flow():
     client_crt_token = client.tls_certificate(client_crt)
 
     # Client asks for access token
-    token_args = client.token_args(grant_code, cert_token=client_crt_token)
+    _, token_args = client.token_req(AUTHZ_DOMAIN, grant_code, crt_token=client_crt_token)
     token_resp = authz.token(**token_args)
     access_token = token_resp['access_token']
     print("access_token", len(access_token))

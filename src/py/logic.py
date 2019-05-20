@@ -1,5 +1,6 @@
 import logging
 import datetime
+from urllib.parse import urlencode
 
 from key import key, secretkey
 from utils import dictargs
@@ -9,6 +10,7 @@ import config
 import order
 import scope
 import store
+import username
 
 
 class LogicException(Exception):
@@ -197,11 +199,12 @@ class User(Base):
 
         client_o = self.from_token(args['client_id'])
 
-        o = order.new(order.ALIAS_AUTHZ,
-                      client=client_o,
-                      redirect_uri=args['redirect_uri'],
-                      scopes=scope.split(args['scopes']),
-                      )
+        o = order.new(
+            order.ALIAS_AUTHZ,
+            client=client_o,
+            redirect_uri=args['redirect_uri'],
+            scopes=scope.split(args['scopes']),
+        )
         self.sign(o)
 
         return order.to_token(o)
@@ -335,10 +338,11 @@ class Client(Base):
 
         return order.to_token(o)
 
-    def request_args(self, scopes, state=None, alias=None):
+    def authorize(self, alias, scopes, state=None):
+        user, domain = username.parse(alias)
         state_o = self.boxer.encrypt(state) if state else None
 
-        return dictargs(
+        args = dictargs(
             alias=alias,
             client_id=self.id(),
             redirect_uri=self.meta['redirect_uri'],
@@ -347,13 +351,18 @@ class Client(Base):
             state=state_o,
         )
 
-    def token_args(self, code, cert_token=None):
+        url = f"{config.ALIAS_PROTO}://{domain}/alias/authorize?{urlencode(args)}"
+        return url, args
+
+    def token_req(self, authz_domain, code, crt_token=None):
         code_o = self.from_token(code)
 
-        return dictargs(
+        url = f"{config.ALIAS_PROTO}://{authz_domain}/alias/token"
+
+        return url, dictargs(
             grant_type='authorization_code',
             code=code,
             redirect_uri=code_o.get('redirect_uri'),
             client_id=self.id(),
-            cert=cert_token,
+            cert=crt_token,
         )

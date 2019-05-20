@@ -1,0 +1,42 @@
+<html>
+    <head>
+        <title>{{ meta["name"]|safe }}</title>
+
+        <script src="static/jquery-3.4.0.min.js"></script>
+        <script src="static/alias.js"></script>
+    </head>
+
+    <html>
+        <h1>Browse</h1>
+
+        <p><a href="#" id="logout" />Logout</a></p>
+
+        {% for rsrc in rsrcs %}
+        <h2>Resource <code>{{ rsrc }}</code></h2>
+        {% endfor %}
+
+        <h2>Tokens</h2>
+        <p>Access token ({{ len(access_token) }}B): <input id="access_token" value="{{ access_token }}" readonly="true" /></p>
+
+        {% if refresh_token %}
+        <p>Refresh token ({{ len(refresh_token) }}B): <input id="refresh_token" value="{{ refresh_token }}" readonly="true" /></p>
+        {% endif %}
+
+        <script>
+$(function() {
+    $("#logout").click(function() {
+        $.ajax({
+            url: '/api/logout',
+            method: 'POST',
+        }).done(function() {
+            window.location.reload();
+        }).fail(function() {
+            alert("could not log out :-(");
+        });
+    });
+
+});
+        </script>
+    </html>
+</html>
+

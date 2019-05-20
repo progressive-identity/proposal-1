@@ -105,23 +105,48 @@ def api_revoked():
         return flask.jsonify(state="ok")
 
 
+def get_dirname(user_k):
+    return str(user_k)
+
+
+def get_crt_hash():
+    crt_hash = flask.request.headers.get("X-Alias-Clientcert-Sha256")
+    if crt_hash:
+        crt_hash = ("sha256", base64.urlsafe_b64decode(crt_hash))
+
+    return crt_hash
+
+@app.route('/alias/resource/')
+def providers():
+    code = flask.request.args.get('code')
+    if not code:
+        return flask.abort(400)
+
+    try:
+        user_root_k, scopes = rsrc.parse_access_token(code, get_crt_hash())
+
+    except logic.ResourceException:
+        return flask.abort(403)
+
+    rsrc_path = os.path.join("/rsrc", get_dirname(user_root_k))
+    authz_providers = index.query_provider(rsrc_path, scopes)
+
+    return flask.jsonify(providers=authz_providers)
+
+
 @app.route('/alias/resource/<provider>')
 def resource(provider):
     code = flask.request.args.get('code')
     if not code:
         return flask.abort(400)
 
-    # XXX
-    crt_hash = None
-
     try:
-        user_root_k, scopes = rsrc.parse_access_token(code, crt_hash)
+        user_root_k, scopes = rsrc.parse_access_token(code, get_crt_hash())
 
     except logic.ResourceException:
         return flask.abort(404)
 
-    user = str(user_root_k)
-    provider_path = os.path.join("/rsrc", user, provider)
+    provider_path = os.path.join("/rsrc", get_dirname(user_root_k), provider)
 
     def json_default(v):
         if isinstance(v, datetime.datetime):
@@ -146,27 +171,22 @@ def resource(provider):
     return flask.Response(generate(), mimetype='application/json')
 
 
-@app.route('/alias/<provider>/<hhuman>')
+@app.route('/alias/resource/<provider>/<hhuman>')
 def query_blob(provider, hhuman):
     code = flask.request.args.get('code')
     if not code:
         return flask.abort(400)
 
-    # XXX
-    crt_hash = None
-
     try:
-        user_root_k, scopes = rsrc.parse_access_token(code, crt_hash)
+        user_root_k, scopes = rsrc.parse_access_token(code, get_crt_hash())
 
     except logic.ResourceException:
         return flask.abort(404)
 
-    user = str(user_root_k)
-
     hashname, hb64 = hhuman.split('_', 1)
     h = base64.urlsafe_b64decode(hb64)
 
-    provider_path = os.path.join("/rsrc", user, provider)
+    provider_path = os.path.join("/rsrc", get_dirname(user_root_k), provider)
     blob = index.query_blob(provider_path, scopes, hashname, h)
 
     if blob:

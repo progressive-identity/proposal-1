@@ -224,7 +224,7 @@ def api_bind_rsrc():
     if do_not_verify:
         print("XXX SSL certificates are not check!", flush=True)
 
-    resp = requests.get(f"{config.ALIAS_PROTO}://{domain}/alias/api/", verify=not do_not_verify)
+    resp = requests.get(f"https://{domain}/alias/api/", verify=not do_not_verify)
     if not resp.ok:
         return flask.jsonify(state="error", error="unreachable domain")
 
@@ -237,7 +237,7 @@ def api_bind_rsrc():
 
     # Send bind token
     args = dict(code=bind_token)
-    resp = requests.post(f"{config.ALIAS_PROTO}://{domain}/alias/api/bind/",
+    resp = requests.post(f"https://{domain}/alias/api/bind/",
                          data=args,
                          verify=not do_not_verify,
                          )
@@ -473,7 +473,7 @@ def authorize():
 @app.route('/alias/token', methods=['POST'])
 def token():
     if flask.request.form.get('grant_type') != 'authorization_code':
-        return flask.jsonify(hey='hey'), 400
+        return flask.jsonify(state="error", reason="bad arguments"), 400
 
     token_resp = authz.token(**flask.request.form)
     return flask.jsonify(**token_resp)

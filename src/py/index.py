@@ -7,6 +7,7 @@ import os
 import re
 
 import msgpack
+import scope
 
 
 def hashfile(func, fh):
@@ -121,9 +122,9 @@ def compress(fpath):
 
 
 class Index:
-    def __init__(self, root_path, scope):
-        self.scope = scope
-        self.fname = f"{self.scope}"
+    def __init__(self, root_path, sc):
+        self.scope = sc
+        self.fname = f"{self.sc}"
         self.fpath = get_index_path(root_path, self.fname)
         self.fh = None
         self.entries = 0
@@ -152,11 +153,11 @@ def dump(root_path, it):
 
     os.system(f'mkdir -p "{get_index_path(root_path)}"')
 
-    for scope, obj in it:
+    for sc, obj in it:
         # Get or create index file handler
-        idx = indexes.get(scope)
+        idx = indexes.get(sc)
         if idx is None:
-            idx = indexes[scope] = Index(root_path, scope)
+            idx = indexes[sc] = Index(root_path, sc)
             idx.fh = open(idx.fpath, "w+b")
 
         m = packb(obj)
@@ -192,7 +193,7 @@ def dump(root_path, it):
         compress(idx.fpath)
 
         # Add reference to index root
-        root_obj[idx.scope] = Collection(idx.fname)
+        root_obj[idx.sc] = Collection(idx.fname)
 
     with open(get_index_path(root_path, "root"), "wb") as fh:
         fh.write(packb(root_obj))
@@ -238,10 +239,10 @@ def full_load(root_path):
     return r
 
 
-def parse_scope(scope):
+def parse_scope(sc):
     # XXX implemet better parsing
 
-    m = re.match(r"^(?P<base>[a-z\.]+)(\[(?P<conds>.*)\])?\.(?P<fields>[\{\}a-z,_*]+)$", scope)
+    m = re.match(r"^(?P<base>[a-z\.]+)(\[(?P<conds>.*)\])?\.(?P<fields>[\{\}a-z,_*]+)$", sc)
 
     if not m:
         raise ValueError("invalid scope")
@@ -296,16 +297,26 @@ def update_fields(dst, src, fields):
                 dst[f] = src[f]
 
 
+def query_provider(root_path, scopes):
+    scopes = [scope.parse(sc) for sc in scopes]
+    authz_providers = set(sc[0] for sc in scopes if sc is not None)
+
+    providers = os.listdir(root_path)
+    authz_providers.intersection_update(set(providers))
+
+    return list(authz_providers)
+
+
 def query(root_path, scopes):
-    scopes = [parse_scope(scope) for scope in scopes]
+    scopes = [parse_scope(sc) for sc in scopes]
 
     with open(get_index_path(root_path, "root"), "rb") as fh:
         r = unpackb(fh.read())
 
     cols = collections.defaultdict(list)
-    for scope, col in r.items():
+    for sc, col in r.items():
         for base, cond, fields in scopes:
-            if scope == base:
+            if sc == base:
                 cols[col.fname].append((cond, fields))
 
     for fname, scopes in cols.items():
@@ -336,7 +347,7 @@ def query_blob(root_path, scopes, hname, h):
         if v.hashname == hname and v._hash == h:
             return v
 
-    for scope, obj in query(root_path, scopes):
+    for sc, obj in query(root_path, scopes):
         f = walk(obj, walker)
         if f:
             return f
@@ -377,8 +388,8 @@ def main():
     r = query(sys.argv[1], sys.argv[2:])
 
     count = 0
-    for scope, v in r:
-        print(scope, json_dumps(v, sort_keys=True, indent=2))
+    for sc, v in r:
+        print(sc, json_dumps(v, sort_keys=True, indent=2))
         count = count + 1
 
     print(f"{count} result(s)", file=sys.stderr)

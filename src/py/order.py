@@ -20,28 +20,31 @@ hasher = getattr(hashlib, config.DEFAULT_HASH)
 
 
 class BaseException(Exception):
-    pass
+    REASON = None
+
+    def __init__(self, o):
+        super().__init__(self.REASON)
+        self.o = o
 
 
 class AlreadySignedException(BaseException):
-    pass
+    REASON = "order is already signed"
 
 
 class InvalidSignatureException(BaseException):
-    pass
+    REASON = "invalid signature"
 
 
 class ExpiredSignatureException(BaseException):
-    pass
+    REASON = "expired signature"
 
 
 class ExpiredOrderException(BaseException):
-    pass
+    REASON = "expired order"
 
 
 class RevokedOrderException(BaseException):
-    def __init__(self, o):
-        super().__init__(format(o))
+    REASON = "revoked order"
 
 
 def new(type_, **kwargs):
@@ -359,6 +362,9 @@ def parents(o, is_root=None):
             for i in o.values():
                 yield from parents(i, False)
 
+
+def sign_date(o):
+    return datetime.datetime.utcfromtimestamp(o['_sig']['dat'])
 
 # Returns the root user of an order
 def user(o):
