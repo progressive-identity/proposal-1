@@ -1,15 +1,24 @@
-# Alias protocol reference design. 
-Backend is mainly in Python & Go.
+# Alias protocol reference design.
 
-### Summary of Alias protocol 
+Features:
+
+- Reference design for a Alias Authorization & Resource server (built in Python);
+- Sample code for a Alias client (built in Python);
+- Builds, signs and verifies tokens&orders (algo: Ed25519 or Secp256k1, SHA-256);
+- Key rotation management;
+- Revocation management and propagation;
+- Order storage based on a relation SQL database (sqlite by default);
+- TLS client-side certificate verification (TLS reverse-proxy built in Go);
+
+Here's a [technical summary of the core concepts of
+Alias](https://github.com/progressive-identity/sandbox/blob/master/doc/SUMMARY).
+
+### Summary of Alias protocol
 
 Alias is a protocol enabling decentralized data export authorizations. When implemented, Alias enables for users to decide to share the data they want, to whom they want, without limitations from any centralized Identity Provider, and in fine grained control.
 
-Technically, Alias is a decentralized protocol based on OAuth 2.0, where each user, identified by an cryptographic alias, can let third-parties ("clients") access to their data stored in  servers ("resource servers"). Access to the data is controlled by an Authorization server ("authorization servers") that manages permissions and scopes. 
+Technically, Alias is a decentralized protocol based on OAuth 2.0, where each user, identified by an cryptographic alias, can let third-parties ("clients") access to their data stored in  servers ("resource servers"). Access to the data is controlled by an Authorization server ("authorization servers") that manages permissions and scopes.
 The main innovation of Alias is that the resource server and the authorization server do not need to be behind the same firewall, enabling users to decide freely and in full control who store their data and who manage permissions in a decentralized way.
-
-
-Here's a [technical summary of the core concepts of Alias](https://github.com/progressive-identity/sandbox/blob/master/doc/SUMMARY)
 
 ### Alias : Adding decentralization of data portability to OAuth2.0
 
