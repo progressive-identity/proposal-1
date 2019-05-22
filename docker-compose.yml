@@ -93,6 +93,7 @@ services:
 
         volumes:
             - ./db/proxy:/proxy
+            - ./src/tls-proxy:/app
 
         command: go run tls-proxy.go -cert /proxy/server.crt -key /proxy/server.key -redirect http://backend.rsrc.alias:80
 
