@@ -39,10 +39,8 @@ def generate(expires_in):
 
 
 def open_certificate(path):
-    with open(path, "rb") as fh:
-        pem = fh.read()
-
-    return x509.load_pem_x509_certificate(pem, default_backend())
+    with open(path, "r") as fh:
+        return from_pem(fh.read())
 
 
 def fingerprint(crt, algo):
@@ -55,8 +53,9 @@ def fingerprint(crt, algo):
 
 def save_certificate(path, crt, sk=None):
     crt_path = path + ".crt"
-    crt_pem = crt.public_bytes(encoding=serialization.Encoding.PEM)
-    with open(crt_path, "wb") as fh:
+    crt_pem = to_pem(crt)
+
+    with open(crt_path, "w") as fh:
         fh.write(crt_pem)
 
     if sk:
@@ -70,3 +69,23 @@ def save_certificate(path, crt, sk=None):
 
         with open(sk_path, "wb") as fh:
             fh.write(sk_pem)
+
+
+def to_pem(crt):
+    return crt.public_bytes(encoding=serialization.Encoding.PEM).decode('ascii')
+
+
+def from_pem(pem):
+    return x509.load_pem_x509_certificate(pem.encode('ascii'), default_backend())
+
+
+def sk_to_pem(sk):
+    return sk.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    ).decode('ascii')
+
+
+def sk_from_pem(pem):
+    return serialization.load_pem_private_key(pem.encode('ascii'), None, default_backend())
