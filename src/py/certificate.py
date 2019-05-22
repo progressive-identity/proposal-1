@@ -13,7 +13,7 @@ def generate(expires_in):
 
     # generate private key
     sk = ec.generate_private_key(
-        curve=ec.SECP256K1,
+        curve=ec.SECP256R1,
         backend=default_backend()
     )
 
