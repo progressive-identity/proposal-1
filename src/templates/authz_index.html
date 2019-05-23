@@ -14,12 +14,20 @@
 
         <h2>Grants</h2>
         <ul>
-        {% for k, c in clients.items() %}
-        <li>{{c['name']|safe}}: <em>{{', '.join(c['scopes'])}}</em> (
-            <a href="/alias/order/{{tob64(c['oh'])|safe}}">order</a> -
-            <a href="#" class="revoke" alias-revoke="{{tob64(c['oh'])|safe}}">revoke</a>
-        )</li>
-        {% endfor %}
+            {% for client_k, scopes in clients.items() %}
+            <li>{{clients_o[client_k]['name']}}, scopes:
+                <ul>
+                {% for sc, grants in sorted(scopes.items()) %}
+                    <li><code>{{sc}}</code>: grant
+                    {% for i, (grant_oh, grant_o) in enumerate(grants.items()) %}
+                        <a href="/alias/order/{{tob64(grant_oh)}}">order {{i+1}}</a>
+                        <a href="#" class="revoke" alias-revoke="{{tob64(grant_oh)}}">(revoke)</a>
+                    {% endfor %}
+                    </li>
+                {% endfor %}
+                </ul>
+            </li>
+            {% endfor %}
         </ul>
 
         <h2>Resources</h2>
@@ -86,6 +94,7 @@ $(function() {
             },
         }).done(function(data) {
             console.log(data);
+            window.location.reload();
         }).fail(function() {
             alert("could not revoke order");
         });

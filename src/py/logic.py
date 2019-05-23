@@ -1,9 +1,8 @@
 import logging
-import datetime
 from urllib.parse import urlencode
 
 from key import key, secretkey
-from utils import dictargs
+from utils import dictargs, utcnow
 import box
 import certificate
 import config
@@ -52,8 +51,6 @@ class Base:
         self.logger = logging.getLogger('alias').getChild(self.PREFIX)
         self.store = store.Store(db_uri, self.logger.getChild("store"))
 
-        self._subkey_order = None
-
         # XXX
         self.store.create_schema()
 
@@ -65,30 +62,39 @@ class Base:
     def check(self, o, **kwargs):
         return order.check(o, store=self.store, **kwargs)
 
+    def store_token(self, code):
+        """ Store token in local store. """
+        o = self.from_token(code)
+        self.store.store_order(o)
+
     # Sign order with root key
     def root_sign(self, o, **kwargs):
         assert self.sk, "secretkey not set"
         order.sign(o, sk=self.sk, store=self.store, **kwargs)
         assert order.root_signer(o) == self.k
+        return o
 
     # Get a valid current subkey, or creates one lazily
     def subkey_order(self):
-        # if no subkey is defined yet, get the last one
-        if self._subkey_order is None:
-            self._subkey_order = self.store.get_last_valid_subkey_order(self.k)
+        subk_o = self.store.get_last_valid_subkey_order(self.k)
 
         # if no subkey were defined, generate one
-        if self._subkey_order is None:
+        if subk_o is None:
             sub_sk = secretkey.default().generate()
             self.store.store_sk(sub_sk)
             sub_k = sub_sk.public()
-            self._subkey_order = order.new(order.ALIAS_SUBKEY, **sub_k.to_dict())
-            self.root_sign(self._subkey_order, exp=config.SUBKEY_EXPIRES_IN)
-            assert self.store.get_last_valid_subkey_order(self.k) == self._subkey_order
+            subk_o = order.new(
+                order.ALIAS_SUBKEY,
+                exp=config.SUBKEY_EXPIRES_IN,
+                **sub_k.to_dict()
+            )
+            self.root_sign(subk_o)
+            assert self.store.get_last_valid_subkey_order(self.k) == subk_o
 
             assert self.store.get_sk(sub_sk.public()) == sub_sk
 
-        return self._subkey_order
+        self.check(subk_o)
+        return subk_o
 
     # Sign order with subkey
     def sign(self, o, **kwargs):
@@ -98,6 +104,7 @@ class Base:
         assert subkey_sk, f"no secret key for {subkey_k}"
         order.sign(o, sk=subkey_sk, k=subkey_k_o, store=self.store, **kwargs)
         assert order.root_signer(o) == self.k
+        return o
 
     # generate a TLS token
     def tls_certificate(self, cert):
@@ -105,8 +112,11 @@ class Base:
         o = order.new(order.ALIAS_CERT,
                       finger=list(certificate.fingerprint(cert, algo)),
                       )
-        self.sign(o)
-        # XXX expiration !
+
+        now = utcnow().timestamp()
+        naf = cert.not_valid_after.timestamp()
+        self.sign(o, now=now, exp=naf - now)
+
         return order.to_token(o)
 
     # generate a revoke token
@@ -181,6 +191,16 @@ class User(Base):
         super().__init__(*kargs, **kwargs)
         self.authz = authz
 
+    def sign(self, *kargs, **kwargs):
+        o = super().sign(*kargs, **kwargs)
+        self.store.store_order(o)
+        return o
+
+    def root_sign(self, *kargs, **kwargs):
+        o = super().root_sign(*kargs, **kwargs)
+        self.store.store_order(o)
+        return o
+
     # User binds a domain and a resource server
     def bind(self, authz, rsrc):
         assert 'raw' in authz and 'alg' in authz and 'domain' in authz
@@ -204,6 +224,7 @@ class User(Base):
             client=client_o,
             redirect_uri=args['redirect_uri'],
             scopes=scope.split(args['scopes']),
+            exp=config.DEFAULT_GRANT_TOKEN_TIMEOUT,
         )
         self.sign(o)
 
@@ -222,8 +243,46 @@ class User(Base):
 
         return r
 
-    def iter_grants(self):
-        return self.store.iter_user_grants(self.k)
+    def clients(self):
+        clients = {}  # {client_k: {scope: {grant_oh: grant_o, ...}}}
+        clients_o = {}  # {client_k: client_o}
+        for o in self.store.iter_user_client_orders(self.k):
+            if o['type'] == order.ALIAS_ACCESS:
+                grant_o = o['grant']
+
+            elif o['type'] == order.ALIAS_AUTHZ:
+                grant_o = o
+
+            elif o['type'] == order.ALIAS_REFRESH:
+                grant_o = o['grant']
+
+            else:
+                raise Exception(f"unknown order {o['type']}")
+
+            client_o = grant_o['client']
+            client_k = order.root_signer(client_o)
+            k = str(client_k)
+
+            if k in clients_o:
+                if order.sign_date(clients_o[k]) < order.sign_date(client_o):
+                    clients_o.pop(k)
+
+            if k not in clients_o:
+                clients_o[k] = client_o
+
+            scopes = clients.get(k)
+            if scopes is None:
+                scopes = clients[k] = {}
+
+            for sc in grant_o['scopes']:
+                grants = scopes.get(sc)
+                if grants is None:
+                    grants = scopes[sc] = {}
+
+                oh = order.root_hash(grant_o)
+                grants[oh] = grant_o
+
+        return clients, clients_o
 
 
 class Resource(BaseUserServer):
@@ -260,9 +319,17 @@ class Resource(BaseUserServer):
 class Authorization(BaseUserServer):
     PREFIX = "authz"
 
-    def token(self, grant_type, code, redirect_uri, client_id, cert=None):
-        assert grant_type == "authorization_code"
+    def token(self, grant_type, **kwargs):
+        if grant_type == 'authorization_code':
+            return self.token_authorization_code(**kwargs)
 
+        # elif grant_type == 'refresh_token':
+        #     return self.token_refresh_token(**kwargs)
+
+        else:
+            raise ValueError(f"unknown grant type: {grant_type!r}")
+
+    def token_authorization_code(self, code, redirect_uri, client_id, cert=None):
         client_o = self.from_token(client_id)
         assert client_o['type'] == order.ALIAS_REGISTER
         client_k = order.root_signer(client_o)
@@ -278,14 +345,15 @@ class Authorization(BaseUserServer):
             assert order.root_signer(cert_o) == client_k
 
         # XXX re-use access token
-        now = datetime.datetime.utcnow()
-        naf = now + datetime.timedelta(seconds=config.DEFAULT_ACCESS_TOKEN_TIMEOUT)
-        access_o = order.new(order.ALIAS_ACCESS,
-                             grant=grant_o,
-                             cert=cert_o,
-                             naf=naf.timestamp(),
-                             )
+        access_o = order.new(
+            order.ALIAS_ACCESS,
+            grant=grant_o,
+            cert=cert_o,
+            exp=config.DEFAULT_ACCESS_TOKEN_TIMEOUT,
+        )
         self.sign(access_o)
+
+        now = utcnow()
         expires_in = (order.expiration(access_o) - now).total_seconds()
 
         # XXX check bind was not expired?
@@ -306,6 +374,7 @@ class Authorization(BaseUserServer):
             token_type="bearer",
             expires_in=expires_in,
             scopes=access_o['grant']['scopes'],
+            refresh_token=code,
             rsrcs=rsrcs,
         )
 
@@ -339,6 +408,7 @@ class Client(Base):
         return order.to_token(o)
 
     def authorize(self, alias, scopes, state=None):
+        assert isinstance(scopes, (list, tuple))
         user, domain = username.parse(alias)
         state_o = self.boxer.encrypt(state) if state else None
 
@@ -347,7 +417,7 @@ class Client(Base):
             client_id=self.id(),
             redirect_uri=self.meta['redirect_uri'],
             response_type='code',
-            scopes=scopes,
+            scopes=",".join(scopes),
             state=state_o,
         )
 
@@ -366,3 +436,12 @@ class Client(Base):
             client_id=self.id(),
             cert=crt_token,
         )
+
+#    def refresh_token_req(self, authz_domain, refresh_token, crt_token=None):
+#        url = f"{config.ALIAS_PROTO}://{authz_domain}/alias/token"
+#
+#        return url, dictargs(
+#            grant_type='refresh_token',
+#            refresh_token=refresh_token,
+#            cert=crt_token,
+#        )

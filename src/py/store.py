@@ -5,7 +5,7 @@ import sqlalchemy as sql
 import sqlalchemy.orm as orm
 import sqlalchemy.ext.declarative
 
-from utils import tob64
+from utils import tob64, utcnow
 from key import key, secretkey
 import order
 
@@ -76,6 +76,9 @@ class Order(Base):
 
     # User ultimately linked
     user_k = sql.Column(sql_Key(), nullable=True)
+
+    # Client ultimately linked
+    client_k = sql.Column(sql_Key(), nullable=True)
 
     bind = orm.relationship("Bind", uselist=False, back_populates="order")
     revocation = orm.relationship("Revocation", uselist=False, back_populates="order")
@@ -197,6 +200,7 @@ class Store():
             type=o['type'],
             raw=order.to_raw(o),
             user_k=order.user(o),
+            client_k=order.client(o),
         )
 
         if order.signed(o):
@@ -245,7 +249,7 @@ class Store():
 
             for o_sql in orders:
                 o = order_from_sql(o_sql)
-                for signed_o in order.iter_signatures(o):
+                for signed_o in order.iter_signed(o):
                     if order.root_hash(signed_o) == revoke_o['h']:
                         yield o_sql
 
@@ -260,7 +264,7 @@ class Store():
     # low-level query
 
     def query_order(self, sess, *kargs):
-        now = datetime.datetime.utcnow()
+        now = utcnow()
         return sess.query(*kargs)\
             .filter(
                 Order.sign_date <= now,
@@ -278,8 +282,7 @@ class Store():
             o = self.query_order(sess, Order.raw, Order.h)\
                 .filter(
                     Order.type == type_,
-                    Order.root_signer == k,
-            )\
+                    Order.root_signer == k)\
                 .order_by(Order.sign_date.desc())\
                 .one()
 
@@ -295,7 +298,7 @@ class Store():
                 Order.type == order.ALIAS_BIND,
                 Bind.id == Order.id)
 
-        # now = datetime.datetime.utcnow()
+        # now = utcnow()
         # return sess\
         #    .query(*kargs)\
         #    .filter(
@@ -390,7 +393,7 @@ class Store():
                 return "user"
 
     def revocation(self, h):
-        now = datetime.datetime.utcnow()
+        now = utcnow()
         try:
             self.session().query(Order.id)\
                 .filter(
@@ -434,11 +437,15 @@ class Store():
 
         return map(order_from_sql, it)
 
-    def iter_user_grants(self, user_k):
+    def iter_user_client_orders(self, user_k):
         it = self.query_order(self.session(), Order.raw, Order.h)\
             .filter(
-                Order.type == order.ALIAS_AUTHZ,
-                Order.root_signer == user_k)
+                Order.user_k == user_k,
+                sql.or_(
+                    Order.type == order.ALIAS_AUTHZ,
+                    Order.type == order.ALIAS_ACCESS,
+                    Order.type == order.ALIAS_REFRESH,
+                ))
         it = list(it)
         return map(order_from_sql, it)
 
@@ -449,7 +456,7 @@ class Store():
         if not o:
             raise UnknownOrderException(o)
 
-        now = datetime.datetime.utcnow()
+        now = utcnow()
         rc_sql = RevocationConfirm(
             revoke_id=o.id,
             party_k=k,
@@ -459,7 +466,7 @@ class Store():
         sess.commit()
 
     def pending_revocations(self, self_k, user_k=None, oh=None):
-        now = datetime.datetime.utcnow()
+        now = utcnow()
 
         sess = self.session()
 
@@ -469,14 +476,15 @@ class Store():
         # be unknown
         q = sess.query(Order.id, Order.type, Order.h, Order.user_k)\
             .filter(
-                Order.revocation_date is None,
-                Order.revocation_date <= now,
                 Revocation.h == Order.h,
+                sql.or_(
+                    Order.revocation_date == None,  # noqa E771
+                    Order.revocation_date <= now,
+                ),
                 sql.or_(
                     Order.expiration == None,   # noqa E771
                     now <= Order.expiration,
-                ),
-                Order.user_k is None)
+                ))
 
         if user_k is not None:
             q = q.filter(Order.user_k == user_k)
@@ -495,7 +503,6 @@ class Store():
 
             user_ks.add(o_sql.user_k)
 
-        # print(o_ids, bind_ids, user_ks, flush=True)
         # get all authz & rsrcs servers from the users of the revoked orders
         q = sess.query(Bind)\
             .filter(
@@ -534,7 +541,7 @@ class Store():
 
         for rc in q:
             oh = o_ids[rc.revoke_id]
-            r[oh].pop(rc.party_k)
+            r[oh].pop(rc.party_k, None)
 
             if not r[oh]:
                 r.pop(oh)

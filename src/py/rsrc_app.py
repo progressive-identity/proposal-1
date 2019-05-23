@@ -12,6 +12,7 @@ from flask_cors import cross_origin
 from key import secretkey
 import logic
 import index
+import order
 
 DOMAIN = os.environ["ALIAS_DOMAIN"]
 
@@ -116,6 +117,7 @@ def get_crt_hash():
 
     return crt_hash
 
+
 @app.route('/alias/resource/')
 def providers():
     code = flask.request.args.get('code')
@@ -126,7 +128,10 @@ def providers():
         user_root_k, scopes = rsrc.parse_access_token(code, get_crt_hash())
 
     except logic.ResourceException:
-        return flask.abort(403)
+        return flask.abort(404)
+
+    except order.BaseException:
+        return flask.abort(404)
 
     rsrc_path = os.path.join("/rsrc", get_dirname(user_root_k))
     authz_providers = index.query_provider(rsrc_path, scopes)
@@ -144,6 +149,9 @@ def resource(provider):
         user_root_k, scopes = rsrc.parse_access_token(code, get_crt_hash())
 
     except logic.ResourceException:
+        return flask.abort(404)
+
+    except order.BaseException:
         return flask.abort(404)
 
     provider_path = os.path.join("/rsrc", get_dirname(user_root_k), provider)
@@ -181,6 +189,9 @@ def query_blob(provider, hhuman):
         user_root_k, scopes = rsrc.parse_access_token(code, get_crt_hash())
 
     except logic.ResourceException:
+        return flask.abort(404)
+
+    except order.BaseException:
         return flask.abort(404)
 
     hashname, hb64 = hhuman.split('_', 1)

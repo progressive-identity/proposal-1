@@ -3,22 +3,24 @@
 from urllib.parse import urlencode
 import base64
 import datetime
-import os
-import tempfile
 import json
+import os
+import pprint
 import re
+import tempfile
 
 import flask
 import flask_session
 import requests
 import redis
 
-from key import secretkey
-from utils import dictargs, tob64
+from key import secretkey, key
+from utils import dictargs, tob64, utcnow, fromb64
 import certificate
 import config
 import logic
 import order
+import scope
 import username
 
 app = flask.Flask(
@@ -67,7 +69,7 @@ def clear_grants():
 @app.route("/grant", methods=['POST'])
 def post_grant():
     name = flask.request.form['name']
-    scopes = flask.request.form['scopes']
+    scopes = scope.split(flask.request.form['scopes'])
 
     user, domain = username.parse(name)
 
@@ -197,6 +199,7 @@ def grant_index_resource(grant_k):
 
     return flask.Response(r.content, mimetype=mimetype)
 
+
 def json_from_token(code):
     if code is None:
         return None
@@ -273,6 +276,12 @@ def get_tokens(grant_k):
 
             r = r.json()
 
+            if 'error' in r:
+                return flask.jsonify(
+                    state='error',
+                    reason=r['error']
+                )
+
     except order.BaseException as e:
         return flask.jsonify(
             state="error",
@@ -333,25 +342,79 @@ def cb():
 
     return flask.redirect(f"/grant/{k}/", code=302)
 
-#   token_url = f"{config.ALIAS_PROTO}://{state['authz_domain']}/alias/token"
-#    token_args = client.token_args(code)
-#
-#    resp = requests.post(token_url, data=token_args)
-#    print(resp.text)
-#    resp_j = resp.json()
-#
-#    rsrc_domain = resp_j['rsrcs'][0]
-#    rsrc_url = f"{config.ALIAS_PROTO}://{rsrc_domain}/alias/resource"
-#    access_token = resp_j['access_token']
-#    args = dict(code=access_token)
-#
-#    url = f"{rsrc_url}?{urlencode(args)}"
-#
-#    return flask.jsonify(
-#        access_token=access_token,
-#        base_url=rsrc_url,
-#        url=url,
-#    )
+
+@app.route("/alias/order/<ohb64>/")
+def get_order(ohb64):
+    now = utcnow()
+
+    oh = fromb64(ohb64)
+    o_m = client.get_all_order(oh)
+
+    if not o_m:
+        return flask.abort(404)
+
+    o, m = o_m
+    exp = m['expiration']
+    revocation_date = m['revocation_date']
+    expired = exp and now >= exp
+    revoked = revocation_date and now >= revocation_date
+
+    signer = order.root_signer(o)
+    date = datetime.datetime.utcfromtimestamp(o['_sig']['dat'])
+
+    def indent(i):
+        return '  ' * i
+
+    def pretty(o, idt=0):
+        is_root = idt == 0
+
+        if is_root:
+            o = dict(o)
+            o.pop('_sig')
+
+        if isinstance(o, (list, tuple)):
+            yield '[\n'
+            for i in o:
+                yield indent(idt + 1)
+                yield from pretty(i, idt + 1)
+                yield ",\n"
+            yield indent(idt) + ']'
+
+        elif isinstance(o, dict):
+            if order.signed(o) and not is_root:
+                ohb64 = tob64(order.root_hash(o))
+                yield f'<a href="/alias/order/{ohb64}">order <code>{ohb64}</code></a>'
+
+            else:
+                yield '{\n'
+                for k, v in o.items():
+                    yield indent(idt + 1) + repr(k) + ': '
+                    yield from pretty(v, idt + 1)
+                    yield ",\n"
+                yield indent(idt) + '}'
+
+        else:
+            yield flask.escape(repr(o))
+
+    pretty_o = flask.Markup("".join(pretty(o)))
+
+    return flask.render_template(
+        'order.html',
+        date=date,
+        exp=exp,
+        expired=expired,
+        key=key,
+        o=o,
+        ohb64=ohb64,
+        order=order,
+        pformat=pprint.pformat,
+        pretty_o=pretty_o,
+        revocation_date=revocation_date,
+        revoked=revoked,
+        signer=signer,
+        sorted=sorted,
+        tob64=tob64,
+    )
 
 
 def run():

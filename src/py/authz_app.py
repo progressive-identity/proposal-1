@@ -11,7 +11,7 @@ from flask_cors import cross_origin
 import flask
 import requests
 
-from utils import fromb64, tob64, dictargs
+from utils import fromb64, tob64, dictargs, utcnow
 from key import secretkey, key
 import config
 import logic
@@ -277,6 +277,20 @@ def api_revoke():
     code = user.revoke(o)
     authz.store.store_order(authz.from_token(code))
 
+    # broadcast revocations XXX
+    r = authz.pending_revocations()
+    print(r, flush=True)
+    q = []
+    for h, v in r.items():
+        for k, domain in v['servers'].items():
+            q.append(dict(
+                h=tob64(h),
+                code=v['code'],
+                k=str(k),
+                domain=domain
+            ))
+    authz_worker.broadcast_revocations.delay(q)
+
     return flask.jsonify(status="ok", code=code)
 
 
@@ -318,7 +332,6 @@ def api_revocations():
                 domain=domain
             ))
 
-    authz_worker.broadcast_revocations.delay(q)
     return flask.jsonify(r=q)
 
 ###
@@ -333,32 +346,13 @@ def route_static(path):
 @app.route('/alias')
 @require_login
 def index():
-    now = datetime.datetime.utcnow()
+    now = utcnow()
 
     u = session_current_user()
     user = u.user()
 
     rsrc_servers = user.get_rsrc_servers()
-    clients = {}
-    for o in user.iter_grants():
-        client_o = o['client']
-        client_id = str(order.root_signer(client_o))
-
-        c = clients.get(client_id)
-        if c is None:
-            oh = order.root_hash(o)
-            o2 = user.get_order(oh)
-            assert o == o2
-            c = dict(
-                name=client_o['name'],
-                desc=client_o['desc'],
-                oh=oh,
-                scopes=set()
-            )
-            clients[client_id] = c
-
-        for scope in o['scopes']:
-            c['scopes'].add(scope)
+    clients, clients_o = user.clients()
 
     all_orders = []
     for o, exp in user.iter_all_orders():
@@ -373,15 +367,19 @@ def index():
 
         all_orders.append(e)
 
-    return flask.render_template('authz_index.html',
-                                 DOMAIN=DOMAIN,
-                                 all_orders=all_orders,
-                                 clients=clients,
-                                 rsrc_servers=rsrc_servers,
-                                 tob64=tob64,
-                                 user=u,
-                                 user_k=str(user.k),
-                                 )
+    return flask.render_template(
+        'authz_index.html',
+        DOMAIN=DOMAIN,
+        all_orders=all_orders,
+        clients=clients,
+        clients_o=clients_o,
+        enumerate=enumerate,
+        rsrc_servers=rsrc_servers,
+        sorted=sorted,
+        tob64=tob64,
+        user=u,
+        user_k=str(user.k),
+    )
 
 
 @app.route("/alias/login", methods=["GET", "POST"])
@@ -472,27 +470,33 @@ def token():
     if flask.request.form.get('grant_type') != 'authorization_code':
         return flask.jsonify(state="error", reason="bad arguments"), 400
 
-    token_resp = authz.token(**flask.request.form)
+    try:
+        token_resp = authz.token(**flask.request.form)
+
+    except order.BaseException as e:
+        return flask.jsonify(error=e.REASON)
+
     return flask.jsonify(**token_resp)
 
 
 @app.route("/alias/order/<ohb64>")
 @require_login
 def get_order(ohb64):
-    now = datetime.datetime.utcnow()
+    now = utcnow()
 
     u = session_current_user()
     user = u.user()
 
     oh = fromb64(ohb64)
-    o, m = user.get_all_order(oh)
+    o_m = user.get_all_order(oh)
+    if not o_m:
+        return flask.abort(404)
+
+    o, m = o_m
     exp = m['expiration']
     revocation_date = m['revocation_date']
     expired = exp and now >= exp
     revoked = revocation_date and now >= revocation_date
-
-    if not o:
-        return flask.abort(404)
 
     signer = order.root_signer(o)
     date = datetime.datetime.utcfromtimestamp(o['_sig']['dat'])

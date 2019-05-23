@@ -2,11 +2,12 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
-import datetime
+
+from utils import utcnow
 
 
 def generate(expires_in):
-    now = datetime.datetime.utcnow()
+    now = utcnow()
 
     from cryptography.hazmat.primitives.asymmetric import ec
     # from cryptography.x509.oid import NameOID

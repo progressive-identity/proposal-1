@@ -1,4 +1,9 @@
 import base64
+import datetime
+
+
+def utcnow():
+    return datetime.datetime.utcnow()
 
 
 def tob64(x):

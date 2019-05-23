@@ -23,12 +23,33 @@
 
         <h2>Tokens</h2>
         <ul>
-            <li id="grant">Grant token: <input class="code" readonly="yes" />
-                <span class="state"></span></li>
-            <li id="access">Access token: <input class="code" readonly="yes" />
-                <span class="state"></span></li>
-            <li id="refresh">Refresh token: <input clas="code" readonly="yes" />
-                <span class="state"></span></li>
+            <li id="grant">Grant:
+                <ul>
+                    <li>Order: <a class="order" href="#"
+                                                target="_blank"><code></code></a>
+                    <li>Code: <input class="code" readonly="yes" /></li>
+                    <li>State: <span class="state"></span></li>
+                    <li>Expiration: <span class="exp"></span></li>
+                </ul>
+            </li>
+            <li id="access">Access:
+                <ul>
+                    <li>Order: <a class="order" href="#"
+                                                target="_blank"><code></code></a>
+                    <li>Code: <input class="code" readonly="yes" /></li>
+                    <li>State: <span class="state"></span></li>
+                    <li>Expiration: <span class="exp"></span></li>
+                </ul>
+            </li>
+            <li id="refresh">Refresh:
+                <ul>
+                    <li>Order: <a class="order" href="#"
+                                                target="_blank"><code></code></a>
+                    <li>Code: <input class="code" readonly="yes" /></li>
+                    <li>State: <span class="state"></span></li>
+                    <li>Expiration: <span class="exp"></span></li>
+                </ul>
+            </li>
         </ul>
 
         <button id="get_token">Get/Refresh tokens</button>
@@ -63,11 +84,21 @@
         };
 
         function displayOrder(id, o) {
+            if (o == null) {
+                $("#" + id).hide();
+                return;
+            }
+
+            $("#" + id + " .order").attr("href", "/alias/order/" + o.oh);
+            $("#" + id + " .order code").text(o.oh);
             $("#" + id + " .code").attr("value", o.code);
             if (o.valid[0]) {
+                $("#" + id + " .state").css("color", "green").text("valid");
             } else {
                 $("#" + id + " .state").css("color", "red").text(o.valid[1]);
             }
+            $("#" + id + " .exp").text(o.expiration);
+            $("#" + id).show();
         };
 
         $(function() {
@@ -82,14 +113,8 @@
                 $("#owner").text(r.alias.user + "@" + r.alias.domain);
 
                 displayOrder("grant", r.grant);
-
-                if (r.access != null) {
-                    displayOrder("access", r.access);
-                }
-
-                if (r.refresh != null) {
-                    displayOrder("refresh", r.refresh);
-                }
+                displayOrder("access", r.access);
+                displayOrder("refresh", r.refresh);
 
                 $("html").show();
             });

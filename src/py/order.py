@@ -4,7 +4,7 @@ import datetime
 
 import msgpack
 
-from utils import dictargs
+from utils import dictargs, utcnow
 import config
 from key import key
 
@@ -12,6 +12,7 @@ ALIAS_ACCESS = "alias/access"
 ALIAS_AUTHZ = "alias/authorize"
 ALIAS_BIND = "alias/bind"
 ALIAS_CERT = "alias/crt"
+ALIAS_REFRESH = "alias/refresh"
 ALIAS_REGISTER = "alias/register"
 ALIAS_REVOKE = "alias/revoke"
 ALIAS_SUBKEY = "alias/key"
@@ -23,8 +24,27 @@ class BaseException(Exception):
     REASON = None
 
     def __init__(self, o):
-        super().__init__(self.REASON)
         self.o = o
+
+        super().__init__(self.reason())
+
+    def reason(self):
+        return f"{self.REASON}: {format(self.o)}"
+
+
+class FutureSignatureException(BaseException):
+    REASON = "order is signed in the future"
+
+    def __init__(self, o, delta):
+        self.delta = delta
+        super().__init__(o)
+
+    def reason(self):
+        return super().reason() + f": {datetime.timedelta(seconds=self.delta)}"
+
+
+class FutureSignatureReferenceException(FutureSignatureException):
+    REASON = "referenced order is signed in the future"
 
 
 class AlreadySignedException(BaseException):
@@ -43,11 +63,17 @@ class ExpiredOrderException(BaseException):
     REASON = "expired order"
 
 
+class ExpiredOrderReferenceException(ExpiredOrderException):
+    REASON = "expired order reference"
+
+
 class RevokedOrderException(BaseException):
     REASON = "revoked order"
 
 
 def new(type_, **kwargs):
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+    assert 'type' not in kwargs
     kwargs['type'] = type_
     return kwargs
 
@@ -109,17 +135,18 @@ def sign(o, sk, k=None, exp=None, now=None, store=None):
         raise AlreadySignedException(o)
 
     if now is None:
-        now = datetime.datetime.utcnow().timestamp()
-
-    naf = now + exp if exp is not None else None
+        now = utcnow().timestamp()
 
     if k is None:
         k = sk.public().to_dict()
 
+    # Ensure key is valid
+    check(k, store=store, now=now)
+
     sig = dictargs(
         k=k,
         dat=now,
-        naf=naf if naf else None,
+        exp=exp,
     )
 
     proof = _Signature(sig, o).sign(sk)
@@ -241,53 +268,79 @@ def from_token(x, auto_check=None, store=None):
     return o
 
 
-def iter_signatures(o):
+def iter_signed_parents(o, parent=None):
     if isinstance(o, (tuple, list)):
         for i in o:
-            yield from iter_signatures(i)
+            yield from iter_signed_parents(i, parent)
 
     elif isinstance(o, dict):
+        child_parent = o if signed(o) else parent
+
         for i in o.values():
-            yield from iter_signatures(i)
+            yield from iter_signed_parents(i, child_parent)
 
         if signed(o):
-            yield o
+            yield o, parent
+
+
+def iter_signed(o):
+    return (i[0] for i in iter_signed_parents(o))
 
 
 def check(o, store=None, now=None):
     assert o
     if now is None:
-        now = datetime.datetime.utcnow().timestamp()
+        now = utcnow().timestamp()
 
-    orders = list(iter_signatures(o))
+    def assert_or_raise(x, exc_cls, o_, *kargs):
+        if not x:
+            raise exc_cls(o_, *kargs)
 
-    # check no signatures expired
-    for i in orders:
-        if 'naf' in i['_sig'] and now >= i['_sig']['naf']:
-            raise ExpiredSignatureException(o)
+    orders = list(iter_signed_parents(o))
 
-    # check root order is not expired
-    naf = o.get('naf')
-    if naf is not None and now >= naf:
-        raise ExpiredOrderException(o)
+    for oi, parent_o in orders:
+        # check signature is not in the future
+        nbf = oi['_sig']['dat']
+        assert_or_raise(now >= nbf, FutureSignatureException, oi, nbf - now)
+
+        # check parent order didn't sign an order signed in the future
+        if parent_o:
+            assert_or_raise(parent_o['_sig']['dat'] >= nbf, FutureSignatureReferenceException, parent_o, nbf - parent_o['_sig']['dat'])
+
+        # check no signatures expired
+        sig_exp = oi['_sig'].get('exp')
+        if sig_exp:
+            assert_or_raise(now < nbf + sig_exp, ExpiredSignatureException, oi)
+
+        o_exp = oi.get('exp')
+        if o_exp:
+            o_naf = nbf + o_exp
+
+            # if oi is root, check not expired
+            if parent_o is None:
+                assert_or_raise(now < o_naf, ExpiredOrderException, oi)
+
+            # if oi is not root, check no order was expired when referenced by a parent signed order
+            else:
+                assert_or_raise(parent_o['_sig']['dat'] < o_naf, ExpiredOrderReferenceException, parent_o)
 
     # check no orders were revoked
     if store:
-        if store.bulk_is_revoked(map(root_hash, orders)):
-            raise RevokedOrderException(o)
+        orders_h = [root_hash(oi) for oi, _ in orders]
+        assert_or_raise(not store.bulk_is_revoked(orders_h), RevokedOrderException, o)
 
 
 def expiration(o):
+    """ Returns order's expiration date. Returned value if order is not valid. """
+
     def iter_expirations(o):
         # signatures expiration
-        for i in iter_signatures(o):
-            naf = i['_sig'].get('naf')
-            if naf is not None:
-                yield naf
+        for o, parent_o in iter_signed_parents(o):
+            if 'exp' in o['_sig']:
+                yield o['_sig']['dat'] + o['_sig']['exp']
 
-        # order expiration
-        if 'naf' in o:
-            yield o['naf']
+            if 'exp' in o and parent_o is None:
+                yield o['_sig']['dat'] + o['exp']
 
     nafs = list(iter_expirations(o))
     if nafs:
@@ -366,14 +419,30 @@ def parents(o, is_root=None):
 def sign_date(o):
     return datetime.datetime.utcfromtimestamp(o['_sig']['dat'])
 
+
 # Returns the root user of an order
 def user(o):
     return ({
         ALIAS_ACCESS: lambda o: user(o['grant']),
-        ALIAS_AUTHZ: lambda o: root_signer(o),
-        ALIAS_BIND: lambda o: root_signer(o),
+        ALIAS_AUTHZ: root_signer,
+        ALIAS_BIND: root_signer,
         ALIAS_CERT: lambda o: None,
+        ALIAS_REFRESH: lambda o: user(o['grant']),
         ALIAS_REGISTER: lambda o: None,
+        ALIAS_REVOKE: lambda o: None,
+        ALIAS_SUBKEY: lambda o: None,
+    })[o['type']](o)
+
+
+# Returns the root client of an order
+def client(o):
+    return ({
+        ALIAS_ACCESS: lambda o: client(o['grant']),
+        ALIAS_AUTHZ: lambda o: client(o['client']),
+        ALIAS_BIND: lambda o: None,
+        ALIAS_CERT: lambda o: None,
+        ALIAS_REFRESH: lambda o: client(o['grant']),
+        ALIAS_REGISTER: root_signer,
         ALIAS_REVOKE: lambda o: None,
         ALIAS_SUBKEY: lambda o: None,
     })[o['type']](o)
