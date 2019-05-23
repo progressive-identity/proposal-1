@@ -220,11 +220,7 @@ def api_bind_rsrc():
     domain = flask.request.form['domain']
 
     # ping
-    do_not_verify = os.environ.get("FLASK_DEBUG", "n") == "y"
-    if do_not_verify:
-        print("XXX SSL certificates are not check!", flush=True)
-
-    resp = requests.get(f"https://{domain}/alias/api/", verify=not do_not_verify)
+    resp = requests.get(f"https://{domain}/alias/api/", verify=not config.DO_NOT_VERIFY_SSL)
     if not resp.ok:
         return flask.jsonify(state="error", error="unreachable domain")
 
@@ -237,10 +233,11 @@ def api_bind_rsrc():
 
     # Send bind token
     args = dict(code=bind_token)
-    resp = requests.post(f"https://{domain}/alias/api/bind/",
-                         data=args,
-                         verify=not do_not_verify,
-                         )
+    resp = requests.post(
+        f"https://{domain}/alias/api/bind/",
+        data=args,
+        verify=not config.DO_NOT_VERIFY_SSL,
+    )
     if not resp.ok:
         return flask.jsonify(state="error", error="bind failed"), 500
 

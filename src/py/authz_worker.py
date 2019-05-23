@@ -16,9 +16,9 @@ def ping():
 
 
 def broadcast_one_revocation(h, code, k, domain):
-    url = f"{config.ALIAS_PROTO}://{domain}/alias/api/revoked/"
+    url = f"https://{domain}/alias/api/revoked/"
     args = dict(code=code)
-    r = requests.post(url, data=args)
+    r = requests.post(url, data=args, verify=not config.DO_NOT_VERIFY_SSL)
 
     if not r.ok:
         return

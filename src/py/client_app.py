@@ -144,15 +144,11 @@ def grant_index_resource(grant_k):
                 )
                 url = f"https://{rsrc}/alias/resource/{path}?{urlencode(args)}"
 
-                do_not_verify = os.environ.get("FLASK_DEBUG", "n") == "y"
-                if do_not_verify:
-                    print("XXX SSL certificates are not check!", flush=True)
-
                 return requests.request(
                     method,
                     url,
                     cert=cert,
-                    verify=not do_not_verify,
+                    verify=not config.DO_NOT_VERIFY_SSL,
                     **kwargs
                 )
 
