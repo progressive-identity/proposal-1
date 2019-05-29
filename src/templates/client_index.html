@@ -1,13 +1,14 @@
 <html>
     <head>
-        <title>{{ meta["name"]|safe }}</title>
+        <title>👁️ {{ meta["name"]|safe }}</title>
 
+        {% include 'head.html' %}
         <script src="static/jquery-3.4.0.min.js"></script>
         <script src="static/alias.js"></script>
     </head>
 
     <html>
-        <h1>{{ meta["name"]|safe }}</h1>
+        <h1>👁️ {{ meta["name"]|safe }}</h1>
 
         {% if grants %}
         <h2>Grants</h2>
