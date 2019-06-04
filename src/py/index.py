@@ -242,7 +242,7 @@ def full_load(root_path):
 def parse_scope(sc):
     # XXX implemet better parsing
 
-    m = re.match(r"^(?P<base>[a-z\.]+)(\[(?P<conds>.*)\])?\.(?P<fields>[\{\}a-z,_*]+)$", sc)
+    m = re.match(r"^(?P<base>[a-zA-Z_\.]+)(\[(?P<conds>.*)\])?\.(?P<fields>[\{\}a-zA-Z,_*]+)$", sc)
 
     if not m:
         raise ValueError("invalid scope")
@@ -253,7 +253,7 @@ def parse_scope(sc):
     if conds:
         conds2 = []
         for cond in conds.split(','):
-            cond_m = re.match(r"^(?P<k>[a-z0-9_]+)(?P<op>(<=|>=|!=|<|>|=))(?P<v>[^,]+)$", cond)
+            cond_m = re.match(r"^(?P<k>[a-zA-Z0-9_]+)(?P<op>(<=|>=|!=|<|>|=))(?P<v>[^,]+)$", cond)
 
             if not cond_m:
                 raise ValueError("malformed scope")

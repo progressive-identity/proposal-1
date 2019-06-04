@@ -2,10 +2,10 @@ import scope
 
 
 def test_scope():
-    provider, path, conds, fields = scope.parse("provider.path.to.resource[var1=value1].{field_a,field_b}")
+    provider, path, conds, fields = scope.parse("provider.path.to_resource[var1=value1].{field_a,field_b}")
 
     assert provider == "provider"
-    assert path == "path.to.resource"
+    assert path == "path.to_resource"
     assert conds[0].cond == "="
     assert conds[0].var == "var1"
     assert conds[0].value == "value1"
@@ -14,20 +14,20 @@ def test_scope():
 
 
 def test_scope_no_conds():
-    provider, path, conds, fields = scope.parse("provider.path.to.resource.{field_a,field_b}")
+    provider, path, conds, fields = scope.parse("provider.path.to_resource.{field_a,field_b}")
 
     assert provider == "provider"
-    assert path == "path.to.resource"
+    assert path == "path.to_resource"
     assert conds is None
     assert fields[0] == "field_a"
     assert fields[1] == "field_b"
 
 
 def test_scope_all_fields():
-    provider, path, conds, fields = scope.parse("provider.path.to.resource[var1=value1].*")
+    provider, path, conds, fields = scope.parse("provider.path.to_resource[var1=value1].*")
 
     assert provider == "provider"
-    assert path == "path.to.resource"
+    assert path == "path.to_resource"
     assert conds[0].cond == "="
     assert conds[0].var == "var1"
     assert conds[0].value == "value1"
@@ -35,10 +35,10 @@ def test_scope_all_fields():
 
 
 def test_scope_no_conds_all_fields():
-    provider, path, conds, fields = scope.parse("provider.path.to.resource.*")
+    provider, path, conds, fields = scope.parse("provider.path.to_resource.*")
 
     assert provider == "provider"
-    assert path == "path.to.resource"
+    assert path == "path.to_resource"
     assert conds is None
     assert fields[0] == "*"
 
@@ -59,12 +59,12 @@ def test_all_operator():
     OPS = ["=", "<", "<=", ">", ">=", "!="]
 
     conds = ",".join(f"var{i}{op}value{i}" for i, op in enumerate(OPS))
-    s = f"provider.path.to.resource[{conds}].*"
+    s = f"provider.path.to_resource[{conds}].*"
     print(s)
     provider, path, conds, fields = scope.parse(s)
 
     assert provider == "provider"
-    assert path == "path.to.resource"
+    assert path == "path.to_resource"
     for i, (op, cond) in enumerate(zip(OPS, conds)):
         assert cond.cond == op
         assert cond.var == f"var{i}"

@@ -1,7 +1,7 @@
 import re
 
-_RE_SCOPE = re.compile(r"^(?P<provider>[a-z]+)(\.(?P<path>[a-z\.]+))?(\[(?P<conds>.*)\])?\.(?P<fields>[\{\}a-z,_*]+)$")
-_RE_SCOPE_COND = re.compile(r"^(?P<k>[a-z0-9_]+)(?P<op>(<=|>=|!=|<|>|=))(?P<v>[^,]+)$")
+_RE_SCOPE = re.compile(r"^(?P<provider>[a-zA-Z_]+)(\.(?P<path>[a-zA-Z_\.]+))?(\[(?P<conds>.*)\])?\.(?P<fields>[\{\}a-zA-Z,_*]+)$")
+_RE_SCOPE_COND = re.compile(r"^(?P<k>[a-zA-Z0-9_]+)(?P<op>(<=|>=|!=|<|>|=))(?P<v>[^,]+)$")
 
 
 def split(scopes):
