@@ -124,7 +124,7 @@ def compress(fpath):
 class Index:
     def __init__(self, root_path, sc):
         self.scope = sc
-        self.fname = f"{self.sc}"
+        self.fname = f"{self.scope}"
         self.fpath = get_index_path(root_path, self.fname)
         self.fh = None
         self.entries = 0
@@ -193,7 +193,7 @@ def dump(root_path, it):
         compress(idx.fpath)
 
         # Add reference to index root
-        root_obj[idx.sc] = Collection(idx.fname)
+        root_obj[idx.scope] = Collection(idx.fname)
 
     with open(get_index_path(root_path, "root"), "wb") as fh:
         fh.write(packb(root_obj))
