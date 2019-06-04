@@ -1,14 +1,17 @@
 .PHONY: all build process
 
 DOCKER_IMAGE=alias/google
-ALIAS_ROOT=/home/gawen/ressources/alias/root/gawen
+ALIAS_ROOT=/home/gawen/src/gawen/alias/db/rsrc/gawen
 
 all: build
 
-build: alias_index.py
+build: index.py scope.py
 	docker build -t $(DOCKER_IMAGE) .
 
-alias_index.py: ../../src/py/alias_index.py
+index.py: ../../src/py/index.py
+	cp $< $@
+
+scope.py: ../../src/py/scope.py
 	cp $< $@
 
 process: alias_index.py

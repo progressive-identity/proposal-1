@@ -1,22 +1,15 @@
 from collections import OrderedDict
-import base64
+from tqdm import tqdm
 import datetime
 import json
-import lzma
 import mimetypes
 import os
 import re
 
-from dateutil import tz
-from tqdm import tqdm
-
-import alias_index
+import index
 
 GOOGLE_PATH = '/alias/google/'
-GOOGLE_PHOTOS_PATH = os.path.join(GOOGLE_PATH, 'root/Takeout/Google Photos')
 
-RE_MEDIA_DATETIME = re.compile(r"^(?P<type>(IMG|VID))[_-](?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2})[_-]((?P<hour>[0-9]{2})(?P<minute>[0-9]{2})(?P<second>[0-9]{2}))?")
-RE_PARENTDIR_DATE = re.compile(r"^(?P<year>[0-9]{4})-(?P<month>[0-9]{2})-(?P<day>[0-9]{2})")
 
 def progress(desc):
     def decorator(func):
@@ -29,14 +22,23 @@ def progress(desc):
         return wrapper
     return decorator
 
+
 @progress("browsing files")
 def walk_files(path):
     for path, dirs, fns in os.walk(path):
         for fn in fns:
             yield os.path.join(path, fn)
 
+# Photos
+
+
+RE_MEDIA_DATETIME = re.compile(r"^(?P<type>(IMG|VID))[_-](?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2})[_-]((?P<hour>[0-9]{2})(?P<minute>[0-9]{2})(?P<second>[0-9]{2}))?")
+RE_PARENTDIR_DATE = re.compile(r"^(?P<year>[0-9]{4})-(?P<month>[0-9]{2})-(?P<day>[0-9]{2})")
+
+
 @progress("browsing Google Photos")
 def walk_photos():
+    GOOGLE_PHOTOS_PATH = os.path.join(GOOGLE_PATH, 'root/Takeout/Google Photos')
     for fpath in walk_files(GOOGLE_PHOTOS_PATH):
         mime, encoding = mimetypes.guess_type(fpath)
 
@@ -53,6 +55,7 @@ def walk_photos():
             meta = None
 
         yield fpath, mime, meta
+
 
 def photos():
     for fpath, mime, meta_json in walk_photos():
@@ -95,14 +98,39 @@ def photos():
                 meta['long'] = geo[0]
                 meta['lat'] = geo[1]
 
-        meta['full_image'] = alias_index.File(fpath, "sha256")
+        meta['full_image'] = index.File(fpath, "sha256")
 
         yield meta
+
+
+# My Activity > Assistant
+
+
+@progress("browsing My Acitivity > Assistant")
+def my_activity_assistant():
+    path = os.path.join(GOOGLE_PATH, "root", "Takeout", "My Activity", "Assistant")
+
+    with open(os.path.join(path, "MyActivity.json"), "r") as fh:
+        activities = json.load(fh)
+
+    for rec in activities:
+        rec["hasAudioFiles"] = "audioFiles" in rec
+
+        if "audioFiles" in rec:
+            new_audio_files = []
+            for audio_fname in rec["audioFiles"]:
+                audio_fpath = os.path.join(path, audio_fname)
+                new_audio_files.append(index.File(audio_fpath, "sha256"))
+            rec["audioFiles"] = new_audio_files
+
+        yield rec
 
 
 def generator():
     for v in photos():
         yield "google.photo", v
+    for v in my_activity_assistant():
+        yield "google.my_activity.assistant", v
 
-alias_index.dump(GOOGLE_PATH, generator())
 
+index.dump(GOOGLE_PATH, generator())
