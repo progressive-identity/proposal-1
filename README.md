@@ -1,4 +1,4 @@
-# Alias protocol reference design.
+# Alias portability protocol reference design.
 
 Features:
 
@@ -13,7 +13,7 @@ Features:
 Here's a [technical summary of the core concepts of
 Alias](https://github.com/progressive-identity/sandbox/blob/master/doc/SUMMARY).
 
-### Summary of Alias protocol
+### Summary of Alias protocol (also called *GDPR token*)
 
 Alias is a protocol enabling decentralized data export authorizations. When implemented, Alias enables for users to decide to share the data they want, to whom they want, without limitations from any centralized Identity Provider, and in fine grained control.
 
