@@ -3,7 +3,7 @@ version: "2"
 
 services:
     ### Client ############################################
-    client.alias:
+    client.gdpr.dev.local:
         image: alias/ref-python
         ports:
             - "127.0.1.1:80:80"
@@ -12,7 +12,7 @@ services:
             - FLASK_APP=client_app
             - FLASK_DEBUG=y
             - FLASK_SECRET_KEY="R/obWlw/RjRjF4/tKQmgIyEKjOQVQz90NEClkGDvsYg="
-            - ALIAS_DOMAIN=client.alias
+            - ALIAS_DOMAIN=client.gdpr.dev.local
             - ALIAS_SK=_dVj-FVsTV5NR-La1lpIrHtf2os5TvnZGgpJKtoKkMVrFogDmu2ZmK5GVyYmjqJJQhzeXv3_3Du_J7_ES75N9g.ed25519.secret
             - ALIAS_DB_URI=sqlite:////store/{}.sqlite
 
@@ -23,17 +23,17 @@ services:
             - ./db/store:/store
 
         links:
-            - authz.alias
-            - rsrc.alias
-            - redis.client.alias
+            - authz.gdpr.dev.local
+            - rsrc.gdpr.dev.local
+            - redis.client.gdpr.dev.local
 
         command: python3 client_app.py
 
-    redis.client.alias:
+    redis.client.gdpr.dev.local:
         image: redis
 
     ### Authorization server ##############################
-    authz.alias:
+    authz.gdpr.dev.local:
         image: alias/ref-python
         ports:
             - "127.0.1.2:80:80"
@@ -43,9 +43,9 @@ services:
             - FLASK_DEBUG=y
             - FLASK_SECRET_KEY="V+lyTWhxClXECzI6TkqYkZ3Rngnz5UZ2Mt1IO/eAgIs="
 
-            - ALIAS_AUTHZ_BROKER=redis://redis.authz.alias
+            - ALIAS_AUTHZ_BROKER=redis://redis.authz.gdpr.dev.local
             - ALIAS_DB_URI=sqlite:////store/{}.sqlite
-            - ALIAS_DOMAIN=authz.alias
+            - ALIAS_DOMAIN=authz.gdpr.dev.local
             - ALIAS_SK=Tzp4MZDCj25Fo5vy1fSZzmuu82JcbG3-LjlIcj9jbHEeCiplg32_fNo-r0XRUMgnywtYKFw_TZAnAapKl8LMqQ.ed25519.secret
 
         volumes:
@@ -55,69 +55,87 @@ services:
             - ./db/store:/store
 
         links:
-            - redis.authz.alias
+            - redis.authz.gdpr.dev.local
 
             # resource server
-            - rsrc.alias
-            - backend.rsrc.alias
+            - rsrc.gdpr.dev.local
+            - backend.rsrc.gdpr.dev.local
 
         command: python3 authz_app.py
 
-    worker.authz.alias:
+    worker.authz.gdpr.dev.local:
         image: alias/ref-python
 
         environment:
-            - ALIAS_AUTHZ_BROKER=redis://redis.authz.alias
-            - ALIAS_DOMAIN=authz.alias
+            - ALIAS_AUTHZ_BROKER=redis://redis.authz.gdpr.dev.local
+            - ALIAS_DOMAIN=authz.gdpr.dev.local
 
         links:
-            - redis.authz.alias
+            - redis.authz.gdpr.dev.local
 
             # resource server
-            - rsrc.alias
-            - backend.rsrc.alias
+            - rsrc.gdpr.dev.local
+            - backend.rsrc.gdpr.dev.local
 
         volumes:
             - ./src/py:/app:ro
 
         command: celery -A authz_worker worker --loglevel=info
 
-    redis.authz.alias:
+    redis.authz.gdpr.dev.local:
         image: redis
 
     ### Resource server ###################################
 
-    rsrc.alias:
+    rsrc.gdpr.dev.local:
         image: alias/tls-proxy
         ports:
             - "127.0.1.3:443:443"
 
         links:
-            - backend.rsrc.alias
+            - nginx.rsrc.gdpr.dev.local
 
         volumes:
             - ./db/proxy:/proxy
             - ./src/tls-proxy:/app
 
-        command: go run tls-proxy.go -cert /proxy/server.crt -key /proxy/server.key -redirect http://backend.rsrc.alias:80
+        command: go run tls-proxy.go -cert /proxy/server.crt -key /proxy/server.key -redirect http://nginx.rsrc.gdpr.dev.local:80
 
-    backend.rsrc.alias:
-        image: alias/ref-python
+    nginx.rsrc.gdpr.dev.local:
+        image: alias/rsrc-nginx
         ports:
             - "127.0.1.3:80:80"
+
+        links:
+            - backend.rsrc.gdpr.dev.local
+            - tus.rsrc.gdpr.dev.local
+
+    backend.rsrc.gdpr.dev.local:
+        image: alias/ref-python
 
         environment:
             - FLASK_APP=rsrc_app
             - FLASK_DEBUG=y
             - FLASK_SECRET_KEY="1j85+vCY9J8SmP0MjebSsqh9k2oNA/RDhjsR9LqeoDw="
-            - ALIAS_DOMAIN=rsrc.alias
+            - ALIAS_DOMAIN=rsrc.gdpr.dev.local
             - ALIAS_SK=RSK-6Bwsar5P4ny1XDUvDejc3vMA7XySm4AH_lS3cW2BQCZBCPU77O3jyF-7xs9G8axuJPrOVxurzcitdvsueQ.ed25519.secret
             - ALIAS_DB_URI=sqlite:////store/{}.sqlite
 
         volumes:
+            - ./src/templates:/templates:ro
+            - ./src/static:/static:ro
             - ./src/py:/app:ro
             - ./db/store:/store
             - ./db/rsrc:/rsrc
 
+              # indexing
+            - ./db/upload:/upload
+            - /var/run/docker.sock:/var/run/docker.sock
+
         command: python3 rsrc_app.py
 
+    tus.rsrc.gdpr.dev.local:
+        image: tusproject/tusd
+        volumes:
+            - ./db/upload:/upload
+        entrypoint: tusd -dir /upload

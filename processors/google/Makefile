@@ -1,6 +1,6 @@
 .PHONY: all build process
 
-DOCKER_IMAGE=alias/google
+DOCKER_IMAGE=alias/processor-google
 ALIAS_ROOT=/home/gawen/src/gawen/alias/db/rsrc/gawen
 
 all: build

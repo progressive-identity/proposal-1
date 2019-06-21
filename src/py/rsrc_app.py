@@ -13,14 +13,22 @@ from key import secretkey
 import logic
 import index
 import order
+import indexer
 
 DOMAIN = os.environ["ALIAS_DOMAIN"]
 
 app = flask.Flask(
     __name__,
+    template_folder="/templates",
+    static_folder="/static",
 )
 
 rsrc = None
+
+
+@app.route('/alias/static/<path:path>')
+def route_static(path):
+    return flask.send_from_directory(app.static_folder, path)
 
 
 @app.route("/alias/api/")
@@ -218,6 +226,51 @@ def query_blob(provider, hhuman):
 
     else:
         return flask.abort(404)
+
+# Upload & Indexing
+
+
+@app.route('/alias/upload/')
+def upload():
+    return flask.render_template('rsrc_upload.html')
+
+
+@app.route("/alias/upload/process/", methods=["POST"])
+def upload_process():
+    urls = flask.request.form.getlist('urls[]')
+
+    uploads = []
+    for url in urls:
+        _, upload_id = url.rsplit('/', 1)
+        if not upload_id:
+            return flask.abort(400)
+
+        upload_path = os.path.join("/upload", upload_id)
+        upload_info_path = upload_path + ".info"
+        upload_bin_path = upload_path + ".bin"
+
+        if not os.path.exists(upload_info_path) or not os.path.exists(upload_bin_path):
+            return flask.abort(400)
+
+        with open(upload_info_path, "r") as fh:
+            upload_info = json.load(fh)
+
+        uploads.append(upload_info)
+
+    # XXX TODO user
+    # XXX TODO provider
+    r = indexer.index("gawen", "google", uploads)
+
+    return flask.jsonify(**r)
+
+
+@app.route("/alias/upload/process/<id>")
+def upload_process_id(id):
+    state = indexer.status(id)
+    if state is None:
+        return flask.abort(404)
+
+    return flask.jsonify(**state)
 
 
 def run():

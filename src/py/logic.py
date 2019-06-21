@@ -214,7 +214,7 @@ class User(Base):
 
         return order.to_token(o)
 
-    def authorize(self, args):
+    def authorize(self, args, scopes):
         assert args['response_type'] == 'code'
 
         client_o = self.from_token(args['client_id'])
@@ -223,7 +223,7 @@ class User(Base):
             order.ALIAS_AUTHZ,
             client=client_o,
             redirect_uri=args['redirect_uri'],
-            scopes=scope.split(args['scopes']),
+            scopes=scopes,
             exp=config.DEFAULT_GRANT_TOKEN_TIMEOUT,
         )
         self.sign(o)
@@ -382,9 +382,9 @@ class Authorization(BaseUserServer):
         assert args['response_type'] == 'code'
 
         client_o = self.from_token(args['client_id'])
-        scopes = scope.split(args['scopes'])
+        main_scopes, consent_scopes = scope.split(args['scopes'])
 
-        return client_o, scopes
+        return client_o, main_scopes, consent_scopes
 
 
 class Client(Base):
@@ -408,7 +408,7 @@ class Client(Base):
         return order.to_token(o)
 
     def authorize(self, alias, scopes, state=None):
-        assert isinstance(scopes, (list, tuple))
+        assert isinstance(scopes, str)
         user, domain = username.parse(alias)
         state_o = self.boxer.encrypt(state) if state else None
 
@@ -417,7 +417,7 @@ class Client(Base):
             client_id=self.id(),
             redirect_uri=self.meta['redirect_uri'],
             response_type='code',
-            scopes=",".join(scopes),
+            scopes=scopes,
             state=state_o,
         )
 

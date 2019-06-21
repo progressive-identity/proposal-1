@@ -23,6 +23,7 @@ import authz_worker
 import pysodium as sodium
 import store
 from store import sql
+import sqlalchemy.orm as orm
 
 DOMAIN = os.environ["ALIAS_DOMAIN"]
 
@@ -86,7 +87,7 @@ class UserManager:
         try:
             u = store.session().query(User).filter_by(alias=alias).one()
 
-        except store.orm.exc.NoResultFound:
+        except orm.exc.NoResultFound:
             return None
 
         else:
@@ -98,7 +99,7 @@ class UserManager:
         try:
             u = store.session().query(User).filter_by(alias=alias).one()
 
-        except store.orm.exc.NoResultFound:
+        except orm.exc.NoResultFound:
             return None
 
         else:
@@ -413,6 +414,42 @@ def logout():
     return flask.redirect("/alias/login", code=302)
 
 
+def send_email():
+    import sendgrid
+
+    # XXX TODO
+    message = sendgrid.Mail(
+        from_email=config.ALIAS_EMAIL_FROM,
+        to_emails="user@email.com",    # XXX TODO
+        subject="Alias: it seems you need to import your GDPR data from Google 🙂",
+        html_content=flask.render_template("authz_mail.html")
+    )
+
+    try:
+        sg = sendgrid.SendGridAPIClient(config.SENDGRID_API_KEY)
+        response = sg.send(message)
+        print(response.status_code)
+        print(response.body)
+        print(response.headers)
+
+    except Exception as e:
+        print(e.message)
+
+
+@app.route("/alias/import", methods=['GET', 'POST'])
+def do_import():
+    redirect_uri = flask.request.args['redirect_uri']
+    code = flask.request.args['code']
+    state = flask.request.args.get('state')
+
+    if not flask.request.args.get("ok"):
+        return flask.render_template("authz_email.html")
+
+    args = dictargs(redirect_uri=redirect_uri, code=code, state=state)
+    url = f"{redirect_uri}?{urlencode(args)}"
+    return flask.redirect(url, code=302)
+
+
 @app.route("/alias/authorize", methods=['GET', 'POST'])
 def authorize():
     # XXX redirect to client when an error happens (malformed request, ...)
@@ -425,6 +462,11 @@ def authorize():
         url = f"{redirect_uri}?{urlencode(args)}"
         return flask.redirect(url, code=302)
 
+    def redirect_import(**kwargs):
+        args = dictargs(**kwargs)
+        url = f"/alias/import?{urlencode(args)}"
+        return flask.redirect(url, code=302)
+
     def redirect_error(error, desc=None, uri=None):
         return redirect(error=error, error_description=desc, error_uri=uri)
 
@@ -433,7 +475,7 @@ def authorize():
         return redirect_error("invalid_request", "missing argument 'redirect_uri'")
 
     try:
-        client_o, scopes = authz.parse_request(flask.request.args)
+        client_o, main_scopes, consent_scopes = authz.parse_request(flask.request.args)
     except Exception:   # XXX what exceptions?
         return redirect_error("invalid_request")
 
@@ -454,15 +496,39 @@ def authorize():
         if not agree:
             return redirect(error="access_denied")
 
-        grant_code = u.user().authorize(flask.request.args)
-        return redirect(code=grant_code, state=state)
+        print(flask.request.form, flush=True)
+        scopes = []
+        scopes.extend(main_scopes)
+        for i, cs in enumerate(consent_scopes):
+            has_consent = flask.request.form[f"consent-{i}"] == "yes"
+            if not has_consent:
+                continue
 
-    return flask.render_template("authz_authorize.html",
-                                 client=client_o,
-                                 scopes=sorted(scopes),
-                                 alias=alias,
-                                 pformat=pprint.pformat,
-                                 )
+            scopes.append(cs)
+
+        grant_code = u.user().authorize(flask.request.args, scopes)
+
+        send_email()
+
+        return redirect_import(code=grant_code, state=state, redirect_uri=redirect_uri)
+        # return redirect(code=grant_code, state=state)
+
+    user = u.user()
+    user_k = user.k
+
+    return flask.render_template(
+        "authz_authorize.html",
+        client=client_o,
+        client_h=tob64(order.root_hash(client_o)),
+        client_signdate=order.sign_date(client_o),
+        client_signer=order.root_signer(client_o),
+        user_k=user_k,
+        main_scopes=sorted(main_scopes),
+        consent_scopes=sorted(consent_scopes),
+        alias=alias,
+        pformat=pprint.pformat,
+        enumerate=enumerate,
+    )
 
 
 @app.route('/alias/token', methods=['POST'])

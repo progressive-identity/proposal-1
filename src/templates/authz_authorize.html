@@ -3,28 +3,124 @@
         <title>🔒 Authorize request</title>
 
         {% include 'authz_head.html' %}
+
+        <style>
+        html {
+            background-color: #f0f0f0;
+        }
+
+        .title {
+            font-size: 120%;
+            font-weight: bold;
+        }
+
+        #popup {
+            background-color: white;
+            width: 550px;
+            border: 1px solid #ccd6dd;
+            border-radius: 4px;
+            padding: 20px;
+            margin-top: 40px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        #popup-content {
+            position: relative;
+            /*margin-right: 250px;*/
+        }
+
+        #client {
+            position: absolute;
+            top: 0;
+            right: -250px;
+            width: 230px;
+            color: #8899a6;
+        }
+
+        .desc {
+            font-size: 80%;
+        }
+
+        #advanced {
+            color: gray;
+            font-size: 80%;
+        }
+
+        #advanced-info {
+            display: none;
+            color: gray;
+            font-size: 90%;
+        }
+        </style>
     </head>
 
     <html>
-        <h1>🔒 Authorize</h1>
+        <div id="popup">
+        <div id="popup-content">
+            <p class="title">🔒 <em>{{ client['name'] }}</em> is requesting
+            access to your data</p>
 
-        <p>Client <em>{{ client['name'] }}</em> is requesting access to your following data:</p>
+            {% if 'legal' in client %}
+            {% if 'usage' in client['legal'] %}
+            <blockquote class="usage">
+                {{client['legal']['usage']}}
+            </blockquote>
+            {% endif %}
+            {% endif %}
 
-        <ul>
-            {% for s in scopes %}
-            <li>Scope <code>{{ s }}</code></li>
+            <p>This application will access to the following data:</p>
+            <ul>
+                {% for s in main_scopes %}
+                <li>Scope <code>{{ s }}</code></li>
+                {% endfor %}
+            </ul>
+
+            <form method="POST">
+
+            {% if consent_scopes %}
+            <p>To fulfill the request,</p>
+            <ul>
+            {% for i, s in enumerate(consent_scopes) %}
+            <li>Do you also consent to share data scoped <code>{{s}}</code>?
+                <input type="radio" name="consent-{{i}}" value="yes"><label for="yes"> Yes</label>
+                <input type="radio" name="consent-{{i}}" value="no" checked><label for="no"> No</label>
             </li>
             {% endfor %}
-        </ul>
+            </ul>
+            {% endif %}
 
-        <p>Do you agree?</p>
-        <form method="POST">
+            <p>Your data will be shared with <em>{{client['name']}}</em>
+            {% if 'legal' in client %}
+            {% if 'third' in client['legal'] %}
+            {% for t in client['legal']['third'] %}
+            <em>{{t}}</em>
+            {% endfor %}
+            {% endif %}
+            {% endif %}
+            .</p>
+
             <button id="agree" name="agree" value="y">I agree</button>
             <button id="deny" name="deny" value="y">I deny</button>
-        </form>
+            </form>
 
-        <h2>Raw</h2>
-        <pre>{{ pformat(client)|safe }}</pre>
+            <a href="#" id="advanced">Advanced</a>
+            <div id="advanced-info">
+                <p>
+                    Your key: <code>{{user_k}}</code><br />
+                    Requester's key: <code>{{client_signer}}</code><br />
+                    Client token hash: <code>{{client_h}}</code><br />
+                    Request date: <code>{{client_signdate}}</code>
+                </p>
+            </div>
+        </div>
+        </div>
+
+    <script>
+        $("#advanced").click(function() {
+            $("#advanced-info").toggle();
+        });
+    </script>
     </html>
 </html>
 

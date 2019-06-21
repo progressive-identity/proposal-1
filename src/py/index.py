@@ -261,6 +261,11 @@ def parse_scope(sc):
             cond_m = cond_m.groupdict()
             k, op, v = cond_m['k'], cond_m['op'], cond_m['v']
 
+            if v == "true":
+                v = True
+            elif v == "false":
+                v = False
+
             op = {
                 '<=': lambda a, b: a <= b,
                 '>=': lambda a, b: a >= b,
@@ -310,8 +315,12 @@ def query_provider(root_path, scopes):
 def query(root_path, scopes):
     scopes = [parse_scope(sc) for sc in scopes]
 
-    with open(get_index_path(root_path, "root"), "rb") as fh:
-        r = unpackb(fh.read())
+    try:
+        with open(get_index_path(root_path, "root"), "rb") as fh:
+            r = unpackb(fh.read())
+    except FileNotFoundError:
+        yield from []
+        return
 
     cols = collections.defaultdict(list)
     for sc, col in r.items():

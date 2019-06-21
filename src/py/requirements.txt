@@ -16,8 +16,14 @@ redis
 redis
 flask_session
 
+# indexing
+docker
+
 # testing
 nose
 
 # cryptographic algorithms
 ecdsa
+
+# demo
+sendgrid

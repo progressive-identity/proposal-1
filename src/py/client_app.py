@@ -36,7 +36,7 @@ REDIRECT_URI = f"{config.ALIAS_PROTO}://{DOMAIN}/alias/cb"
 
 # Redis session
 SESSION_TYPE = "redis"
-SESSION_REDIS = redis.Redis(host="redis.client.alias")
+SESSION_REDIS = redis.Redis(host="redis.client.gdpr.dev.local")
 app.config.from_object(__name__)
 flask_session.Session(app)
 
@@ -69,7 +69,7 @@ def clear_grants():
 @app.route("/grant", methods=['POST'])
 def post_grant():
     name = flask.request.form['name']
-    scopes = scope.split(flask.request.form['scopes'])
+    scopes = flask.request.form['scopes']
 
     user, domain = username.parse(name)
 
@@ -128,6 +128,9 @@ def grant_index_resource(grant_k):
 
     if grant.get('rsrcs') is None or grant.get('crt') is None or grant.get('sk') is None:
         return flask.abort(404)
+
+    if len(grant['rsrcs']) == 0:
+        return "No resource server defined"
 
     rsrc = grant['rsrcs'][0]
 

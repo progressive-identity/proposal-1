@@ -133,4 +133,20 @@ def generator():
         yield "google.my_activity.assistant", v
 
 
-index.dump(GOOGLE_PATH, generator())
+def extract():
+    for fn in os.listdir("/alias/upload/"):
+        if not fn.endswith('.tgz'):
+            continue
+
+        fpath = os.path.join("/alias/upload/", fn)
+
+        os.system(f'tar xfz "{fpath}" -C "/alias/google/root/"')
+
+
+def main():
+    extract()
+    index.dump(GOOGLE_PATH, generator())
+
+
+if __name__ == '__main__':
+    main()

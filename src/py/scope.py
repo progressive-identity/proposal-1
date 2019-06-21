@@ -5,8 +5,18 @@ _RE_SCOPE_COND = re.compile(r"^(?P<k>[a-zA-Z0-9_]+)(?P<op>(<=|>=|!=|<|>|=))(?P<v
 
 
 def split(scopes):
-    # XXX TODO
-    return [scopes]
+    main, consent = [], []
+
+    for scope in scopes.split():
+        if scope.startswith("?"):
+            consent.append(scope[1:])
+        else:
+            main.append(scope)
+
+    main.sort()
+    consent.sort()
+
+    return main, consent
 
 
 class ScopeCondition:
